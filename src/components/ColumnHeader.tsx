@@ -5,7 +5,7 @@ import { Popover } from './Popover';
 /** Column currently being dragged (dataTransfer can't be read during dragover). */
 let draggingId: string | null = null;
 
-const TYPE_LABEL: Record<Column['type'], string> = { text: 'Text', select: 'Dropdown', status: 'Status', url: 'Link' };
+const TYPE_LABEL: Record<Column['type'], string> = { text: 'Text', select: 'Dropdown', status: 'Status', url: 'Link', people: 'Person', time: 'Time tracking' };
 
 interface Props {
   column: Column;

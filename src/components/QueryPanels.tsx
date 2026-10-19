@@ -1,14 +1,15 @@
-import type { Column, FilterOp, FilterRule, SortRule, ViewQuery } from '../types';
-import { OPS, isOptionColumn, opNeedsValue, opUsesOption } from '../logic';
+import type { Column, FilterOp, FilterRule, SortRule, User, ViewQuery } from '../types';
+import { OPS, choicesFor, opNeedsValue, opUsesOption } from '../logic';
 import { uid } from '../defaults';
 
 interface PanelProps {
   columns: Column[];
+  users: User[];
   query: ViewQuery;
   onChange: (q: ViewQuery) => void;
 }
 
-export function FilterPanel({ columns, query, onChange }: PanelProps) {
+export function FilterPanel({ columns, users, query, onChange }: PanelProps) {
   const setRule = (id: string, patch: Partial<FilterRule>) =>
     onChange({ ...query, filters: query.filters.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
 
@@ -65,7 +66,7 @@ export function FilterPanel({ columns, query, onChange }: PanelProps) {
               opUsesOption(col, rule.op) ? (
                 <select className="input" value={rule.value} onChange={(e) => setRule(rule.id, { value: e.target.value })}>
                   <option value="">Select…</option>
-                  {col.options.map((o) => (
+                  {choicesFor(col, users).map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.label}
                     </option>
@@ -108,11 +109,11 @@ export function FilterPanel({ columns, query, onChange }: PanelProps) {
 
 export function addFilter(query: ViewQuery, columns: Column[], columnId?: string): ViewQuery {
   const col = columns.find((c) => c.id === columnId) ?? columns.find((c) => !c.locked) ?? columns[0];
-  const op: FilterOp = isOptionColumn(col) ? 'is' : 'contains';
+  const op: FilterOp = opUsesOption(col, 'is') ? 'is' : 'contains';
   return { ...query, filters: [...query.filters, { id: uid(), columnId: col.id, op, value: '' }] };
 }
 
-export function SortPanel({ columns, query, onChange }: PanelProps) {
+export function SortPanel({ columns, query, onChange }: Omit<PanelProps, 'users'>) {
   const setRule = (id: string, patch: Partial<SortRule>) =>
     onChange({ ...query, sort: query.sort.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
   const unused = columns.find((c) => !query.sort.some((s) => s.columnId === c.id));

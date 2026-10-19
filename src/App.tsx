@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CellValue, Item, SortDir, ViewQuery } from './types';
 import { useBoard } from './store';
-import { applyQuery, cellCopyText, isActiveRule, sameQuery, valueFromText } from './logic';
+import { applyQuery, cellCopyText, isActiveRule, isEditable, makeCtx, sameQuery, valueFromText } from './logic';
 import { SelectionContext, useCellSelection, type CellRef } from './selection';
 import { BulkBar } from './components/BulkBar';
 import { GROUP_COLORS, uid } from './defaults';
@@ -9,6 +9,9 @@ import { GroupTable } from './components/GroupTable';
 import { ViewTabs } from './components/ViewTabs';
 import { FilterPanel, SortPanel, addFilter } from './components/QueryPanels';
 import { Popover } from './components/Popover';
+import { Reports } from './components/Reports';
+import { TimerChip } from './components/TimerChip';
+import { UserMenu } from './components/UserMenu';
 
 type Panel = 'filter' | 'sort' | null;
 
@@ -16,14 +19,16 @@ export default function App() {
   const { board, update, reset } = useBoard();
   const [search, setSearch] = useState('');
   const [panel, setPanel] = useState<Panel>(null);
+  const [page, setPage] = useState<'table' | 'reports'>('table');
   const filterBtn = useRef<HTMLButtonElement>(null);
   const sortBtn = useRef<HTMLButtonElement>(null);
 
   const activeView = board.views.find((v) => v.id === board.activeViewId) ?? board.views[0];
   const dirty = !sameQuery(board.draft, activeView);
+  const ctx = useMemo(() => makeCtx(board.users, board.timeEntries), [board.users, board.timeEntries]);
   const visible = useMemo(
-    () => applyQuery(board.items, board.columns, board.draft, search),
-    [board.items, board.columns, board.draft, search],
+    () => applyQuery(board.items, board.columns, board.draft, search, ctx),
+    [board.items, board.columns, board.draft, search, ctx],
   );
   const activeFilters = board.draft.filters.filter((r) => isActiveRule(r, board.columns)).length;
   const narrowing = activeFilters > 0 || search.trim() !== '';
@@ -48,7 +53,7 @@ export default function App() {
       targets.forEach((t, i) => {
         const item = b.items.find((x) => x.id === t.itemId);
         const col = b.columns.find((c) => c.id === t.colId);
-        if (item && col) item.values[col.id] = valueFor(col, i);
+        if (item && col && isEditable(col)) item.values[col.id] = valueFor(col, i);
       });
     });
 
@@ -58,8 +63,8 @@ export default function App() {
   };
 
   // Latest values for the document-level keyboard / clipboard handlers below.
-  const live = useRef({ cells, bounds, rowIds, colIds, board, writeCells });
-  live.current = { cells, bounds, rowIds, colIds, board, writeCells };
+  const live = useRef({ cells, bounds, rowIds, colIds, board, ctx, writeCells });
+  live.current = { cells, bounds, rowIds, colIds, board, ctx, writeCells };
 
   useEffect(() => {
     // Leave keys and clipboard alone while the user is typing in a field.
@@ -74,7 +79,7 @@ export default function App() {
     };
 
     const onCopy = (e: ClipboardEvent) => {
-      const { cells, bounds, rowIds, colIds, board } = live.current;
+      const { cells, bounds, rowIds, colIds, board, ctx } = live.current;
       if (!cells.length || !bounds || typing()) return;
       const sel = new Set(cells.map((c) => `${c.itemId}|${c.colId}`));
       const lines: string[] = [];
@@ -83,7 +88,7 @@ export default function App() {
         const row: string[] = [];
         for (let c = bounds.c1; c <= bounds.c2; c++) {
           const col = board.columns.find((x) => x.id === colIds[c])!;
-          row.push(sel.has(`${item.id}|${col.id}`) ? cellCopyText(col, item).replace(/[\t\n]/g, ' ') : '');
+          row.push(sel.has(`${item.id}|${col.id}`) ? cellCopyText(col, item, ctx).replace(/[\t\n]/g, ' ') : '');
         }
         lines.push(row.join('\t'));
       }
@@ -92,14 +97,18 @@ export default function App() {
     };
 
     const onPaste = (e: ClipboardEvent) => {
-      const { cells, bounds, rowIds, colIds, writeCells } = live.current;
+      const { cells, bounds, rowIds, colIds, board, writeCells } = live.current;
       if (!cells.length || !bounds || typing()) return;
       const text = e.clipboardData?.getData('text/plain') ?? '';
-      const grid = text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map((l) => l.split('\t'));
+      const grid = text
+        .replace(/\r/g, '')
+        .replace(/\n$/, '')
+        .split('\n')
+        .map((l) => l.split('\t'));
       e.preventDefault();
       if (grid.length === 1 && grid[0].length === 1) {
         // One value fills every highlighted cell.
-        writeCells(cells, (col) => valueFromText(col, grid[0][0]));
+        writeCells(cells, (col) => valueFromText(col, grid[0][0], board.users));
         return;
       }
       // A block pastes from the top-left of the selection, spilling over rows/columns as needed.
@@ -115,7 +124,7 @@ export default function App() {
           }
         }),
       );
-      writeCells(targets, (col, i) => valueFromText(col, values[i]));
+      writeCells(targets, (col, i) => valueFromText(col, values[i], board.users));
     };
 
     document.addEventListener('keydown', onKey);
@@ -168,133 +177,174 @@ export default function App() {
     <SelectionContext.Provider value={selection}>
       <div className={`app ${cells.length > 1 ? 'multi' : ''}`}>
         <header className="board-header">
-          <input
-            className="board-title"
-            defaultValue={board.name}
-            key={board.name}
-            onBlur={(e) => e.target.value.trim() && update((b) => void (b.name = e.target.value.trim()))}
-            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-          />
-          <ViewTabs
-            views={board.views}
-            activeId={activeView.id}
-            dirty={dirty}
-            onSelect={loadView}
-            onRename={(id, name) => update((b) => void (b.views.find((v) => v.id === id)!.name = name))}
-            onDelete={(id) => {
-              if (!confirm('Delete this view?')) return;
-              const next = board.views.find((v) => v.id !== id)!;
-              update((b) => {
-                b.views = b.views.filter((v) => v.id !== id);
-                b.activeViewId = next.id;
-                b.draft = { sort: next.sort, conjunction: next.conjunction, filters: next.filters };
-              });
-            }}
-            onAdd={() =>
-              update((b) => {
-                const id = uid();
-                b.views.push({ id, name: `View ${b.views.length + 1}`, sort: [], conjunction: 'and', filters: [] });
-                b.activeViewId = id;
-                b.draft = { sort: [], conjunction: 'and', filters: [] };
-              })
-            }
-          />
-        </header>
-
-        <div className="toolbar">
-          <button
-            className="btn primary"
-            onClick={() =>
-              update((b) => {
-                let g = b.groups[0];
-                if (!g) b.groups.push((g = { id: uid(), name: 'New group', color: GROUP_COLORS[0] }));
-                b.items.unshift({ id: uid(), groupId: g.id, values: { name: 'New task' } });
-              })
-            }
-          >
-            New task
-          </button>
-          <input className="input search" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button
-            ref={filterBtn}
-            className={`btn ghost ${activeFilters ? 'on' : ''}`}
-            onClick={() => setPanel(panel === 'filter' ? null : 'filter')}
-          >
-            ⛃ Filter{activeFilters ? ` / ${activeFilters}` : ''}
-          </button>
-          <button
-            ref={sortBtn}
-            className={`btn ghost ${board.draft.sort.length ? 'on' : ''}`}
-            onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
-          >
-            ⇅ Sort{board.draft.sort.length ? ` / ${board.draft.sort.length}` : ''}
-          </button>
-
-          {dirty && (
-            <div className="save-bar">
-              <span className="muted small">Unsaved changes</span>
-              <button className="btn primary small" onClick={saveView}>
-                Save to “{activeView.name}”
-              </button>
-              <button className="btn ghost small" onClick={saveAsNew}>
-                Save as new view
-              </button>
-              <button className="btn ghost small" onClick={() => loadView(activeView.id)}>
-                Discard
+          <div className="title-row">
+            <input
+              className="board-title"
+              defaultValue={board.name}
+              key={board.name}
+              onBlur={(e) => e.target.value.trim() && update((b) => void (b.name = e.target.value.trim()))}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            />
+            <div className="spacer" />
+            <TimerChip board={board} update={update} />
+            <UserMenu board={board} update={update} />
+          </div>
+          <div className="tab-strip">
+            <ViewTabs
+              views={board.views}
+              activeId={page === 'table' ? activeView.id : ''}
+              dirty={dirty}
+              onSelect={(id) => {
+                setPage('table');
+                if (id !== activeView.id || page === 'table') loadView(id);
+              }}
+              onRename={(id, name) => update((b) => void (b.views.find((v) => v.id === id)!.name = name))}
+              onDelete={(id) => {
+                if (!confirm('Delete this view?')) return;
+                const next = board.views.find((v) => v.id !== id)!;
+                update((b) => {
+                  b.views = b.views.filter((v) => v.id !== id);
+                  b.activeViewId = next.id;
+                  b.draft = { sort: next.sort, conjunction: next.conjunction, filters: next.filters };
+                });
+              }}
+              onAdd={() =>
+                update((b) => {
+                  const id = uid();
+                  b.views.push({ id, name: `View ${b.views.length + 1}`, sort: [], conjunction: 'and', filters: [] });
+                  b.activeViewId = id;
+                  b.draft = { sort: [], conjunction: 'and', filters: [] };
+                })
+              }
+            />
+            <div className={`tab ${page === 'reports' ? 'active' : ''}`}>
+              <button className="tab-btn" onClick={() => setPage('reports')}>
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+                <rect x="1" y="8" width="3" height="7" />
+                <rect x="6.5" y="4" width="3" height="11" />
+                <rect x="12" y="1" width="3" height="14" />
+              </svg>
+              Reports
               </button>
             </div>
-          )}
+          </div>
+        </header>
 
-          <div className="spacer" />
-          <button
-            className="btn ghost small"
-            onClick={() => update((b) => void b.groups.push({ id: uid(), name: 'New group', color: GROUP_COLORS[b.groups.length % GROUP_COLORS.length] }))}
-          >
-            + Add group
-          </button>
-          <button className="btn ghost small" onClick={() => confirm('Reset the board to sample data?') && reset()}>
-            Reset
-          </button>
-        </div>
+        {page === 'reports' ? (
+          <Reports board={board} update={update} />
+        ) : (
+          <>
+            <div className="toolbar">
+              <button
+                className="btn primary"
+                onClick={() =>
+                  update((b) => {
+                    let g = b.groups[0];
+                    if (!g) b.groups.push((g = { id: uid(), name: 'New group', color: GROUP_COLORS[0] }));
+                    b.items.unshift({ id: uid(), groupId: g.id, values: { name: 'New task' } });
+                  })
+                }
+              >
+                New task
+              </button>
+              <input className="input search" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <button
+                ref={filterBtn}
+                className={`btn ghost ${activeFilters ? 'on' : ''}`}
+                onClick={() => setPanel(panel === 'filter' ? null : 'filter')}
+              >
+                ⛃ Filter{activeFilters ? ` / ${activeFilters}` : ''}
+              </button>
+              <button
+                ref={sortBtn}
+                className={`btn ghost ${board.draft.sort.length ? 'on' : ''}`}
+                onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
+              >
+                ⇅ Sort{board.draft.sort.length ? ` / ${board.draft.sort.length}` : ''}
+              </button>
 
-        {panel === 'filter' && (
-          <Popover anchor={filterBtn} onClose={() => setPanel(null)}>
-            <FilterPanel columns={board.columns} query={board.draft} onChange={setDraft} />
-          </Popover>
+              {dirty && (
+                <div className="save-bar">
+                  <span className="muted small">Unsaved changes</span>
+                  <button className="btn primary small" onClick={saveView}>
+                    Save to “{activeView.name}”
+                  </button>
+                  <button className="btn ghost small" onClick={saveAsNew}>
+                    Save as new view
+                  </button>
+                  <button className="btn ghost small" onClick={() => loadView(activeView.id)}>
+                    Discard
+                  </button>
+                </div>
+              )}
+
+              <div className="spacer" />
+              <button
+                className="btn ghost small"
+                onClick={() =>
+                  update(
+                    (b) =>
+                      void b.groups.push({
+                        id: uid(),
+                        name: 'New group',
+                        color: GROUP_COLORS[b.groups.length % GROUP_COLORS.length],
+                      }),
+                  )
+                }
+              >
+                + Add group
+              </button>
+              <button className="btn ghost small" onClick={() => confirm('Reset the board to sample data?') && reset()}>
+                Reset
+              </button>
+            </div>
+
+            {panel === 'filter' && (
+              <Popover anchor={filterBtn} onClose={() => setPanel(null)}>
+                <FilterPanel columns={board.columns} users={board.users} query={board.draft} onChange={setDraft} />
+              </Popover>
+            )}
+            {panel === 'sort' && (
+              <Popover anchor={sortBtn} onClose={() => setPanel(null)}>
+                <SortPanel columns={board.columns} query={board.draft} onChange={setDraft} />
+              </Popover>
+            )}
+
+            <main className="board">
+              {board.groups.map((g) => {
+                const items = groupRows.get(g.id)!;
+                const total = board.items.filter((i) => i.groupId === g.id).length;
+                if (narrowing && !items.length) return null;
+                return (
+                  <GroupTable
+                    key={g.id}
+                    board={board}
+                    group={g}
+                    items={items}
+                    totalInGroup={total}
+                    update={update}
+                    setCell={setCell}
+                    onSortColumn={sortColumn}
+                    onFilterColumn={filterColumn}
+                  />
+                );
+              })}
+              {narrowing && !visible.length && <div className="empty-state">No items match this filter.</div>}
+            </main>
+          </>
         )}
-        {panel === 'sort' && (
-          <Popover anchor={sortBtn} onClose={() => setPanel(null)}>
-            <SortPanel columns={board.columns} query={board.draft} onChange={setDraft} />
-          </Popover>
-        )}
 
-        <main className="board">
-          {board.groups.map((g) => {
-            const items = groupRows.get(g.id)!;
-            const total = board.items.filter((i) => i.groupId === g.id).length;
-            if (narrowing && !items.length) return null;
-            return (
-              <GroupTable
-                key={g.id}
-                board={board}
-                group={g}
-                items={items}
-                totalInGroup={total}
-                update={update}
-                setCell={setCell}
-                onSortColumn={sortColumn}
-                onFilterColumn={filterColumn}
-              />
-            );
-          })}
-          {narrowing && !visible.length && <div className="empty-state">No items match this filter.</div>}
-        </main>
-
-        {cells.length > 1 && (
+        {page === 'table' && cells.length > 1 && (
           <BulkBar
             columns={board.columns}
+            users={board.users}
             cells={cells}
-            onSet={(colId, v) => writeCells(cells.filter((c) => c.colId === colId), () => v)}
+            onSet={(colId, v) =>
+              writeCells(
+                cells.filter((c) => c.colId === colId),
+                () => v,
+              )
+            }
             onClear={() => writeCells(cells, () => undefined)}
             onDismiss={selection.clear}
           />

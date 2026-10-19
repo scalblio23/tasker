@@ -1,4 +1,4 @@
-export type ColumnType = 'text' | 'select' | 'status' | 'url';
+export type ColumnType = 'text' | 'select' | 'status' | 'url' | 'people' | 'time';
 
 export interface SelectOption {
   id: string;
@@ -22,8 +22,24 @@ export interface UrlValue {
   text: string;
 }
 
-/** text → string, select/status → option id, url → UrlValue */
-export type CellValue = string | UrlValue;
+/** text → string, select/status → option id, url → UrlValue, people → user ids. Time columns read `timeEntries`. */
+export type CellValue = string | UrlValue | string[];
+
+export interface User {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  itemId: string;
+  userId: string;
+  /** epoch ms */
+  start: number;
+  /** epoch ms; null while the timer is running */
+  end: number | null;
+}
 
 export interface Item {
   id: string;
@@ -74,6 +90,10 @@ export interface Board {
   items: Item[];
   views: View[];
   activeViewId: string;
+  users: User[];
+  /** Who timers are started for on this device. */
+  currentUserId: string;
+  timeEntries: TimeEntry[];
   /** Sort/filter currently applied — may differ from the saved active view until saved. */
   draft: ViewQuery;
 }

@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import type { CellValue, Column } from '../types';
+import type { CellValue, Column, User } from '../types';
 import type { CellRef } from '../selection';
-import { isOptionColumn, valueFromText } from '../logic';
+import { choicesFor, isEditable, valueFromText } from '../logic';
 import { Popover } from './Popover';
 
 interface Props {
   columns: Column[];
+  users: User[];
   cells: CellRef[];
   /** Set every selected cell in a column. Text is converted per column type. */
   onSet: (colId: string, value: CellValue | undefined) => void;
@@ -14,8 +15,9 @@ interface Props {
 }
 
 /** Floating bar shown while several cells are highlighted. */
-export function BulkBar({ columns, cells, onSet, onClear, onDismiss }: Props) {
+export function BulkBar({ columns, users, cells, onSet, onClear, onDismiss }: Props) {
   const involved = columns.filter((c) => cells.some((x) => x.colId === c.id));
+  const settable = involved.filter(isEditable);
   const rows = new Set(cells.map((c) => c.itemId)).size;
 
   return (
@@ -28,8 +30,8 @@ export function BulkBar({ columns, cells, onSet, onClear, onDismiss }: Props) {
         </span>
       </span>
       <span className="bulk-sep" />
-      {involved.map((c) => (
-        <BulkSetter key={c.id} column={c} count={cells.filter((x) => x.colId === c.id).length} onSet={(v) => onSet(c.id, v)} />
+      {settable.map((c) => (
+        <BulkSetter key={c.id} column={c} users={users} count={cells.filter((x) => x.colId === c.id).length} onSet={(v) => onSet(c.id, v)} />
       ))}
       <span className="bulk-sep" />
       <button className="btn ghost small" onClick={onClear} title="Delete / Backspace">
@@ -42,7 +44,19 @@ export function BulkBar({ columns, cells, onSet, onClear, onDismiss }: Props) {
   );
 }
 
-function BulkSetter({ column, count, onSet }: { column: Column; count: number; onSet: (v: CellValue | undefined) => void }) {
+function BulkSetter({
+  column,
+  users,
+  count,
+  onSet,
+}: {
+  column: Column;
+  users: User[];
+  count: number;
+  onSet: (v: CellValue | undefined) => void;
+}) {
+  const choices = choicesFor(column, users);
+  const pick = column.type !== 'text' && column.type !== 'url';
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -61,29 +75,29 @@ function BulkSetter({ column, count, onSet }: { column: Column; count: number; o
           <div className="menu-label">
             Set {count} {column.name} cell{count === 1 ? '' : 's'} to
           </div>
-          {isOptionColumn(column) ? (
+          {pick ? (
             <div className="option-grid">
-              {column.options.map((o) => (
+              {choices.map((o) => (
                 <button
                   key={o.id}
                   className="option-swatch"
                   style={{ background: o.color }}
                   onClick={() => {
-                    onSet(o.id);
+                    onSet(column.type === 'people' ? [o.id] : o.id);
                     close();
                   }}
                 >
                   {o.label || ' '}
                 </button>
               ))}
-              {!column.options.length && <div className="muted small">No labels yet</div>}
+              {!choices.length && <div className="muted small">Nothing to pick yet</div>}
             </div>
           ) : (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 // Only text/url reach here, so no labels get created on the shared column object.
-                onSet(valueFromText(column, text));
+                onSet(valueFromText(column, text, users));
                 close();
               }}
             >

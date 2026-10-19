@@ -7,6 +7,8 @@ const TYPES: { type: ColumnType; label: string; hint: string; color: string }[] 
   { type: 'select', label: 'Dropdown', hint: 'Pick from colored labels', color: '#a25ddc' },
   { type: 'status', label: 'Status', hint: 'Working on it / Done / Stuck', color: '#00c875' },
   { type: 'url', label: 'Link', hint: 'Clickable URL', color: '#fdab3d' },
+  { type: 'people', label: 'Person', hint: 'Assign users', color: '#00a9ff' },
+  { type: 'time', label: 'Time tracking', hint: 'Start / stop timers', color: '#e2445c' },
 ];
 
 export function AddColumn({ onAdd }: { onAdd: (type: ColumnType, name: string) => void }) {

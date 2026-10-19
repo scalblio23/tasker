@@ -1,11 +1,37 @@
-import type { Board, CellValue, Column, FilterOp, FilterRule, Item, SortRule, UrlValue, ViewQuery } from './types';
+import type { Board, CellValue, Column, FilterOp, FilterRule, Item, SortRule, TimeEntry, UrlValue, User, ViewQuery } from './types';
 import { PALETTE, uid } from './defaults';
+import { formatDuration, totalMs } from './time';
 
 export const isOptionColumn = (col: Column) => col.type === 'select' || col.type === 'status';
 
-export function cellText(col: Column, item: Item): string {
+/** Board-level data some column types need to render their value. */
+export interface CellCtx {
+  users: User[];
+  /** Tracked ms per item id. */
+  tracked: Map<string, number>;
+}
+
+export function makeCtx(users: User[], entries: TimeEntry[], now = Date.now()): CellCtx {
+  const tracked = new Map<string, number>();
+  for (const e of entries) tracked.set(e.itemId, (tracked.get(e.itemId) ?? 0) + totalMs([e], now));
+  return { users, tracked };
+}
+
+/** The pick-list for is / is not filters and bulk set: labels, or users for people columns. */
+export function choicesFor(col: Column, users: User[]): { id: string; label: string; color: string }[] {
+  if (col.type === 'people') return users.map((u) => ({ id: u.id, label: u.name, color: u.color }));
+  return isOptionColumn(col) ? col.options : [];
+}
+
+export function cellText(col: Column, item: Item, ctx: CellCtx): string {
+  if (col.type === 'time') {
+    const ms = ctx.tracked.get(item.id) ?? 0;
+    return ms ? formatDuration(ms) : '';
+  }
   const v = item.values[col.id];
   if (v == null || v === '') return '';
+  if (col.type === 'people')
+    return (Array.isArray(v) ? v : []).map((id) => ctx.users.find((u) => u.id === id)?.name).filter(Boolean).join(', ');
   if (isOptionColumn(col)) return col.options.find((o) => o.id === v)?.label ?? '';
   if (col.type === 'url') {
     const u = v as UrlValue;
@@ -25,8 +51,9 @@ export const OPS: { op: FilterOp; label: string }[] = [
 
 export const opNeedsValue = (op: FilterOp) => op !== 'is_empty' && op !== 'is_not_empty';
 
-/** is / is_not on a select or status column pick an option rather than free text. */
-export const opUsesOption = (col: Column, op: FilterOp) => isOptionColumn(col) && (op === 'is' || op === 'is_not');
+/** is / is_not on select, status and people columns pick from a list rather than free text. */
+export const opUsesOption = (col: Column, op: FilterOp) =>
+  (isOptionColumn(col) || col.type === 'people') && (op === 'is' || op === 'is_not');
 
 /** Rules missing a column or value are ignored, so half-built filters don't hide everything. */
 export function isActiveRule(rule: FilterRule, columns: Column[]) {
@@ -34,11 +61,12 @@ export function isActiveRule(rule: FilterRule, columns: Column[]) {
   return !opNeedsValue(rule.op) || rule.value.trim() !== '';
 }
 
-function matchRule(rule: FilterRule, col: Column, item: Item): boolean {
-  const text = cellText(col, item).toLowerCase();
+function matchRule(rule: FilterRule, col: Column, item: Item, ctx: CellCtx): boolean {
+  const text = cellText(col, item, ctx).toLowerCase();
   const val = rule.value.trim().toLowerCase();
   if (opUsesOption(col, rule.op)) {
-    const hit = item.values[col.id] === rule.value;
+    const v = item.values[col.id];
+    const hit = Array.isArray(v) ? v.includes(rule.value) : v === rule.value;
     return rule.op === 'is' ? hit : !hit;
   }
   switch (rule.op) {
@@ -51,30 +79,37 @@ function matchRule(rule: FilterRule, col: Column, item: Item): boolean {
   }
 }
 
-export function applyQuery(items: Item[], columns: Column[], q: ViewQuery, search: string): Item[] {
+export function applyQuery(items: Item[], columns: Column[], q: ViewQuery, search: string, ctx: CellCtx): Item[] {
   const byId = new Map(columns.map((c) => [c.id, c]));
   const rules = q.filters.filter((r) => isActiveRule(r, columns));
   const needle = search.trim().toLowerCase();
 
   let out = items.filter((item) => {
-    if (needle && !columns.some((c) => cellText(c, item).toLowerCase().includes(needle))) return false;
+    if (needle && !columns.some((c) => cellText(c, item, ctx).toLowerCase().includes(needle))) return false;
     if (!rules.length) return true;
-    const results = rules.map((r) => matchRule(r, byId.get(r.columnId)!, item));
+    const results = rules.map((r) => matchRule(r, byId.get(r.columnId)!, item, ctx));
     return q.conjunction === 'and' ? results.every(Boolean) : results.some(Boolean);
   });
 
   const sorts = q.sort.filter((s) => byId.has(s.columnId));
-  if (sorts.length) out = [...out].sort((a, b) => compareItems(a, b, sorts, byId));
+  if (sorts.length) out = [...out].sort((a, b) => compareItems(a, b, sorts, byId, ctx));
   return out;
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-function compareItems(a: Item, b: Item, sorts: SortRule[], byId: Map<string, Column>) {
+function compareItems(a: Item, b: Item, sorts: SortRule[], byId: Map<string, Column>, ctx: CellCtx) {
   for (const s of sorts) {
     const col = byId.get(s.columnId)!;
-    const ta = cellText(col, a);
-    const tb = cellText(col, b);
+    if (col.type === 'time') {
+      // Numeric on tracked time; untracked items still sink to the bottom.
+      const [ma, mb] = [ctx.tracked.get(a.id) ?? 0, ctx.tracked.get(b.id) ?? 0];
+      if (ma === mb) continue;
+      if (!ma || !mb) return ma ? -1 : 1;
+      return s.dir === 'asc' ? ma - mb : mb - ma;
+    }
+    const ta = cellText(col, a, ctx);
+    const tb = cellText(col, b, ctx);
     // Empty cells always sink to the bottom, whichever direction.
     if (!ta && !tb) continue;
     if (!ta) return 1;
@@ -96,19 +131,29 @@ export function normalizeUrl(url: string) {
 }
 
 /** Text used when copying a cell — the raw URL for links so it round-trips through paste. */
-export function cellCopyText(col: Column, item: Item): string {
+export function cellCopyText(col: Column, item: Item, ctx: CellCtx): string {
   const v = item.values[col.id];
-  if (col.type === 'url' && v && typeof v !== 'string') return v.url;
-  return cellText(col, item);
+  if (col.type === 'url' && v && typeof v === 'object' && !Array.isArray(v)) return v.url;
+  return cellText(col, item, ctx);
 }
+
+/** Time columns are derived from time entries, so bulk edit / paste / clear skip them. */
+export const isEditable = (col: Column) => col.type !== 'time';
 
 /**
  * Turn pasted / typed text into a cell value. For select & status columns the text is matched
- * against label names (case-insensitive) and a new label is added to `col` when none matches.
+ * against label names (case-insensitive) and a new label is added to `col` when none matches;
+ * people columns match user names.
  */
-export function valueFromText(col: Column, text: string): CellValue | undefined {
+export function valueFromText(col: Column, text: string, users: User[]): CellValue | undefined {
   const t = text.trim();
   if (!t) return undefined;
+  if (col.type === 'people') {
+    // "Jem, Cody" → matching users; unknown names are ignored.
+    const names = t.toLowerCase().split(/\s*[,;]\s*/);
+    const ids = users.filter((u) => names.includes(u.name.trim().toLowerCase())).map((u) => u.id);
+    return ids.length ? ids : undefined;
+  }
   if (isOptionColumn(col)) {
     let o = col.options.find((x) => x.label.trim().toLowerCase() === t.toLowerCase());
     if (!o) {

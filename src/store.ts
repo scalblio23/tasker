@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Board } from './types';
-import { sampleBoard } from './defaults';
+import { migrateBoard, sampleBoard } from './defaults';
 
 const KEY = 'tasker.board.v1';
 
 function load(): Board {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as Board;
+    if (raw) return migrateBoard(JSON.parse(raw) as Board);
   } catch {
     /* storage unavailable or corrupt — fall back to sample data */
   }

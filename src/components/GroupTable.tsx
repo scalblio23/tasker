@@ -9,6 +9,10 @@ import { AddColumn } from './AddColumn';
 import { TextCell } from './cells/TextCell';
 import { OptionCell } from './cells/OptionCell';
 import { UrlCell } from './cells/UrlCell';
+import { PeopleCell } from './cells/PeopleCell';
+import { TimeCell } from './cells/TimeCell';
+import { addManualEntry, startTimer, stopTimers } from '../timers';
+import { formatDuration, totalMs } from '../time';
 
 interface Props {
   board: Board;
@@ -124,9 +128,7 @@ export function GroupTable({ board, group, items, totalInGroup, update, setCell,
                   onMouseDown={(e) => selection.onCellMouseDown(e, item.id, c.id)}
                   onMouseEnter={() => selection.onCellMouseEnter(item.id, c.id)}
                 >
-                  {renderCell(c, item, (v) => setCell(item.id, c.id, v), (opts) =>
-                    update((b) => void (b.columns.find((x) => x.id === c.id)!.options = opts)),
-                  )}
+                  {renderCell(c, item, board, update, (v) => setCell(item.id, c.id, v))}
                   {c.locked && (
                     <button
                       className="row-delete"
@@ -161,6 +163,7 @@ export function GroupTable({ board, group, items, totalInGroup, update, setCell,
             {columns.map((c) => (
               <div className="summary-cell" key={c.id}>
                 {isOptionColumn(c) && <Distribution column={c} items={items} />}
+                {c.type === 'time' && <GroupTime board={board} items={items} />}
               </div>
             ))}
           </div>
@@ -170,19 +173,37 @@ export function GroupTable({ board, group, items, totalInGroup, update, setCell,
   );
 }
 
-function renderCell(
-  c: Column,
-  item: Item,
-  onChange: (v: CellValue | undefined) => void,
-  onOptionsChange: (o: Column['options']) => void,
-) {
+function renderCell(c: Column, item: Item, board: Board, update: Mutator, onChange: (v: CellValue | undefined) => void) {
   const v = item.values[c.id];
   switch (c.type) {
     case 'select':
     case 'status':
-      return <OptionCell column={c} value={(v as string) ?? ''} onChange={onChange} onOptionsChange={onOptionsChange} />;
+      return (
+        <OptionCell
+          column={c}
+          value={(v as string) ?? ''}
+          onChange={onChange}
+          onOptionsChange={(opts) => update((b) => void (b.columns.find((x) => x.id === c.id)!.options = opts))}
+        />
+      );
     case 'url':
       return <UrlCell value={v as UrlValue | undefined} onChange={onChange} />;
+    case 'people':
+      return <PeopleCell users={board.users} value={Array.isArray(v) ? v : []} onChange={onChange} />;
+    case 'time': {
+      const me = board.currentUserId;
+      return (
+        <TimeCell
+          entries={board.timeEntries.filter((e) => e.itemId === item.id)}
+          users={board.users}
+          currentUserId={me}
+          onStart={() => update((b) => startTimer(b, item.id, me))}
+          onStop={() => update((b) => stopTimers(b, me, Date.now(), item.id))}
+          onAdd={(ms, userId) => update((b) => addManualEntry(b, item.id, userId, ms))}
+          onDelete={(id) => update((b) => void (b.timeEntries = b.timeEntries.filter((e) => e.id !== id)))}
+        />
+      );
+    }
     default:
       return <TextCell value={(v as string) ?? ''} onChange={onChange} className={c.locked ? 'name' : 'center'} />;
   }
@@ -203,4 +224,11 @@ function Distribution({ column, items }: { column: Column; items: Item[] }) {
       {empty > 0 && <span style={{ flex: empty }} className="dist-empty" title={`Empty: ${empty}`} />}
     </div>
   );
+}
+
+/** Total time tracked on a group's (visible) items. */
+function GroupTime({ board, items }: { board: Board; items: Item[] }) {
+  const ids = new Set(items.map((i) => i.id));
+  const ms = totalMs(board.timeEntries, Date.now(), (e) => ids.has(e.itemId));
+  return ms ? <div className="group-time">{formatDuration(ms)}</div> : null;
 }
