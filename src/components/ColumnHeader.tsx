@@ -6,7 +6,7 @@ import { MAX_WIDTH, MIN_WIDTH, defaultWidth } from '../defaults';
 /** Column currently being dragged (dataTransfer can't be read during dragover). */
 let draggingId: string | null = null;
 
-const TYPE_LABEL: Record<Column['type'], string> = { text: 'Text', select: 'Dropdown', status: 'Status', url: 'Link', people: 'Person', time: 'Time tracking' };
+const TYPE_LABEL: Record<Column['type'], string> = { text: 'Text', select: 'Dropdown', status: 'Status', url: 'Link', people: 'Person', time: 'Time tracking', files: 'Attachments' };
 
 interface Props {
   column: Column;

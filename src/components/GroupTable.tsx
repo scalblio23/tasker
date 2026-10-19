@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Board, CellValue, Column, ColumnType, Group, Item, SortDir, UrlValue } from '../types';
 import type { Mutator } from '../store';
-import { isOptionColumn, moveColumn } from '../logic';
+import { fileRefs, isOptionColumn, moveColumn, peopleIds } from '../logic';
 import { useSelection } from '../selection';
 import { GROUP_COLORS, newColumn, uid } from '../defaults';
 import { ColumnHeader } from './ColumnHeader';
@@ -11,6 +11,7 @@ import { OptionCell } from './cells/OptionCell';
 import { UrlCell } from './cells/UrlCell';
 import { PeopleCell } from './cells/PeopleCell';
 import { TimeCell } from './cells/TimeCell';
+import { FilesCell } from './cells/FilesCell';
 import { addManualEntry, startTimer, stopTimers } from '../timers';
 import { formatDuration, totalMs } from '../time';
 
@@ -273,7 +274,27 @@ function renderCell(c: Column, item: Item, board: Board, update: Mutator, onChan
     case 'url':
       return <UrlCell value={v as UrlValue | undefined} onChange={onChange} />;
     case 'people':
-      return <PeopleCell users={board.users} value={Array.isArray(v) ? v : []} onChange={onChange} />;
+      return <PeopleCell users={board.users} value={peopleIds(v)} onChange={onChange} />;
+    case 'files':
+      // Written to this cell only — never fanned out to a multi-selection, since each cell owns its files.
+      return (
+        <FilesCell
+          value={fileRefs(v)}
+          onAdd={(refs) =>
+            update((b) => {
+              const it = b.items.find((i) => i.id === item.id)!;
+              it.values[c.id] = [...fileRefs(it.values[c.id]), ...refs];
+            })
+          }
+          onRemove={(id) =>
+            update((b) => {
+              const it = b.items.find((i) => i.id === item.id)!;
+              const rest = fileRefs(it.values[c.id]).filter((f) => f.id !== id);
+              it.values[c.id] = rest.length ? rest : undefined;
+            })
+          }
+        />
+      );
     case 'time': {
       const me = board.currentUserId;
       return (

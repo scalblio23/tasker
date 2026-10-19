@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Board } from './types';
 import { migrateBoard, sampleBoard } from './defaults';
+import { collectGarbage } from './files';
+import { fileRefs } from './logic';
 
 const KEY = 'tasker.board.v1';
 
@@ -27,6 +29,15 @@ export function useBoard() {
       /* ignore quota / privacy-mode errors */
     }
   }, [board]);
+
+  // Once per load, drop stored attachment files that no cell references any more.
+  const boardRef = useRef(board);
+  boardRef.current = board;
+  useEffect(() => {
+    const b = boardRef.current;
+    const cols = b.columns.filter((c) => c.type === 'files');
+    collectGarbage(new Set(b.items.flatMap((i) => cols.flatMap((c) => fileRefs(i.values[c.id]).map((f) => f.id)))));
+  }, []);
 
   const update: Mutator = useCallback((fn) => {
     setBoard((prev) => {

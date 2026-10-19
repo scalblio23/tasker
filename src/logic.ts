@@ -1,8 +1,14 @@
-import type { Board, CellValue, Column, FilterOp, FilterRule, Item, SortRule, TimeEntry, UrlValue, User, ViewQuery } from './types';
+import type { Board, CellValue, Column, FileRef, FilterOp, FilterRule, Item, SortRule, TimeEntry, UrlValue, User, ViewQuery } from './types';
 import { PALETTE, uid } from './defaults';
 import { formatDuration, totalMs } from './time';
 
 export const isOptionColumn = (col: Column) => col.type === 'select' || col.type === 'status';
+
+/** People and files cells both hold arrays; these read them safely. */
+export const peopleIds = (v: CellValue | undefined): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+export const fileRefs = (v: CellValue | undefined): FileRef[] =>
+  Array.isArray(v) ? v.filter((x): x is FileRef => typeof x === 'object' && x !== null) : [];
 
 /** Board-level data some column types need to render their value. */
 export interface CellCtx {
@@ -31,7 +37,8 @@ export function cellText(col: Column, item: Item, ctx: CellCtx): string {
   const v = item.values[col.id];
   if (v == null || v === '') return '';
   if (col.type === 'people')
-    return (Array.isArray(v) ? v : []).map((id) => ctx.users.find((u) => u.id === id)?.name).filter(Boolean).join(', ');
+    return peopleIds(v).map((id) => ctx.users.find((u) => u.id === id)?.name).filter(Boolean).join(', ');
+  if (col.type === 'files') return fileRefs(v).map((f) => f.name).join(', ');
   if (isOptionColumn(col)) return col.options.find((o) => o.id === v)?.label ?? '';
   if (col.type === 'url') {
     const u = v as UrlValue;
@@ -66,7 +73,7 @@ function matchRule(rule: FilterRule, col: Column, item: Item, ctx: CellCtx): boo
   const val = rule.value.trim().toLowerCase();
   if (opUsesOption(col, rule.op)) {
     const v = item.values[col.id];
-    const hit = Array.isArray(v) ? v.includes(rule.value) : v === rule.value;
+    const hit = col.type === 'people' ? peopleIds(v).includes(rule.value) : v === rule.value;
     return rule.op === 'is' ? hit : !hit;
   }
   switch (rule.op) {
@@ -168,8 +175,11 @@ export function cellCopyText(col: Column, item: Item, ctx: CellCtx): string {
   return cellText(col, item, ctx);
 }
 
-/** Time columns are derived from time entries, so bulk edit / paste / clear skip them. */
-export const isEditable = (col: Column) => col.type !== 'time';
+/**
+ * Bulk edit / paste / clear skip time columns (derived from time entries) and attachments
+ * (each cell owns its stored files, so they can't be copied or blanked in bulk).
+ */
+export const isEditable = (col: Column) => col.type !== 'time' && col.type !== 'files';
 
 /**
  * Turn pasted / typed text into a cell value. For select & status columns the text is matched

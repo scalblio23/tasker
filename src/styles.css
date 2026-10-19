@@ -402,3 +402,29 @@ select.conj { color: var(--text); }
 }
 .col-resize:hover::after, .col-resizing .col-resize:hover::after { background: var(--primary); }
 body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
+
+/* ---------- attachments ---------- */
+.files-cell {
+  width: 100%; display: flex; align-items: center; justify-content: center; padding: 0 8px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.files-cell:hover { border-color: var(--border); }
+.files-cell.over, .file-list.over { outline: 2px dashed var(--primary); outline-offset: -3px; background: #e6f2ff; }
+.files-cell .placeholder { color: transparent; font-size: 13px; white-space: nowrap; }
+.files-cell:hover .placeholder { color: var(--muted); }
+.file-stack { display: inline-flex; gap: 3px; align-items: center; }
+.file-more { font-size: 12px; color: var(--muted); padding-left: 2px; }
+.file-thumb { object-fit: cover; border: 1px solid var(--grid); flex: none; display: block; }
+.file-thumb.ext {
+  display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 700;
+  text-transform: uppercase; border: none; letter-spacing: 0.02em;
+}
+.files-pop { width: 340px; }
+.file-list { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; min-height: 48px; border-radius: 6px; }
+.file-row { display: flex; align-items: center; gap: 10px; padding: 4px; border-radius: 4px; }
+.file-row:hover { background: var(--hover); }
+.file-name {
+  flex: 1; min-width: 0; border: none; background: none; text-align: left; padding: 0; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file-name:hover { color: var(--primary); }

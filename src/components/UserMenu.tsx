@@ -3,6 +3,7 @@ import type { Board } from '../types';
 import type { Mutator } from '../store';
 import { USER_COLORS, uid } from '../defaults';
 import { stopTimers } from '../timers';
+import { peopleIds } from '../logic';
 import { Avatar } from './Avatar';
 import { Popover } from './Popover';
 
@@ -59,9 +60,12 @@ export function UserMenu({ board, update }: { board: Board; update: Mutator }) {
                   update((b) => {
                     stopTimers(b, u.id);
                     b.users = b.users.filter((x) => x.id !== u.id);
+                    const peopleCols = b.columns.filter((c) => c.type === 'people');
                     for (const i of b.items)
-                      for (const [k, v] of Object.entries(i.values))
-                        if (Array.isArray(v)) i.values[k] = v.filter((id) => id !== u.id);
+                      for (const c of peopleCols) {
+                        const ids = peopleIds(i.values[c.id]).filter((id) => id !== u.id);
+                        i.values[c.id] = ids.length ? ids : undefined;
+                      }
                     if (b.currentUserId === u.id) b.currentUserId = '';
                   });
                 }}

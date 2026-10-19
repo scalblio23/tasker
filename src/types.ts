@@ -1,4 +1,4 @@
-export type ColumnType = 'text' | 'select' | 'status' | 'url' | 'people' | 'time';
+export type ColumnType = 'text' | 'select' | 'status' | 'url' | 'people' | 'time' | 'files';
 
 export interface SelectOption {
   id: string;
@@ -22,8 +22,20 @@ export interface UrlValue {
   text: string;
 }
 
-/** text → string, select/status → option id, url → UrlValue, people → user ids. Time columns read `timeEntries`. */
-export type CellValue = string | UrlValue | string[];
+/** Attachment metadata; the file itself is stored in IndexedDB under `id`. */
+export interface FileRef {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  addedAt: number;
+}
+
+/**
+ * text → string, select/status → option id, url → UrlValue, people → user ids, files → FileRef[].
+ * Time columns read `timeEntries`.
+ */
+export type CellValue = string | UrlValue | string[] | FileRef[];
 
 export interface User {
   id: string;
@@ -88,6 +100,8 @@ export interface View extends ViewQuery {
 }
 
 export interface Board {
+  /** Data shape version, for migrating saved boards. */
+  version?: number;
   name: string;
   columns: Column[];
   groups: Group[];
