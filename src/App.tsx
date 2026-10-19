@@ -1,7 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
-import type { SortDir, ViewQuery } from './types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CellValue, Item, SortDir, ViewQuery } from './types';
 import { useBoard } from './store';
-import { applyQuery, isActiveRule, sameQuery } from './logic';
+import { applyQuery, cellCopyText, isActiveRule, sameQuery, valueFromText } from './logic';
+import { SelectionContext, useCellSelection, type CellRef } from './selection';
+import { BulkBar } from './components/BulkBar';
 import { GROUP_COLORS, uid } from './defaults';
 import { GroupTable } from './components/GroupTable';
 import { ViewTabs } from './components/ViewTabs';
@@ -25,6 +27,106 @@ export default function App() {
   );
   const activeFilters = board.draft.filters.filter((r) => isActiveRule(r, board.columns)).length;
   const narrowing = activeFilters > 0 || search.trim() !== '';
+
+  // Rows per group as rendered, and the flat row/column order the cell selection works over.
+  const groupRows = useMemo(() => {
+    const m = new Map<string, Item[]>(board.groups.map((g) => [g.id, []]));
+    visible.forEach((i) => m.get(i.groupId)?.push(i));
+    return m;
+  }, [board.groups, visible]);
+  const rowIds = useMemo(
+    () => board.groups.filter((g) => !g.collapsed).flatMap((g) => groupRows.get(g.id)!.map((i) => i.id)),
+    [board.groups, groupRows],
+  );
+  const colIds = useMemo(() => board.columns.map((c) => c.id), [board.columns]);
+  const selection = useCellSelection(rowIds, colIds);
+  const { cells, bounds } = selection;
+
+  /** Write values into cells; `valueFor` gets a mutable column so pasted labels can be created. */
+  const writeCells = (targets: CellRef[], valueFor: (col: (typeof board.columns)[number], i: number) => CellValue | undefined) =>
+    update((b) => {
+      targets.forEach((t, i) => {
+        const item = b.items.find((x) => x.id === t.itemId);
+        const col = b.columns.find((c) => c.id === t.colId);
+        if (item && col) item.values[col.id] = valueFor(col, i);
+      });
+    });
+
+  const setCell = (itemId: string, colId: string, v: CellValue | undefined) => {
+    const bulk = cells.length > 1 && selection.isSelected(itemId, colId);
+    writeCells(bulk ? cells.filter((c) => c.colId === colId) : [{ itemId, colId }], () => v);
+  };
+
+  // Latest values for the document-level keyboard / clipboard handlers below.
+  const live = useRef({ cells, bounds, rowIds, colIds, board, writeCells });
+  live.current = { cells, bounds, rowIds, colIds, board, writeCells };
+
+  useEffect(() => {
+    // Leave keys and clipboard alone while the user is typing in a field.
+    const typing = () => !!(document.activeElement as HTMLElement | null)?.closest('input, textarea, select');
+
+    const onKey = (e: KeyboardEvent) => {
+      const { cells, writeCells } = live.current;
+      if ((e.key === 'Delete' || e.key === 'Backspace') && cells.length && !typing()) {
+        e.preventDefault();
+        writeCells(cells, () => undefined);
+      }
+    };
+
+    const onCopy = (e: ClipboardEvent) => {
+      const { cells, bounds, rowIds, colIds, board } = live.current;
+      if (!cells.length || !bounds || typing()) return;
+      const sel = new Set(cells.map((c) => `${c.itemId}|${c.colId}`));
+      const lines: string[] = [];
+      for (let r = bounds.r1; r <= bounds.r2; r++) {
+        const item = board.items.find((i) => i.id === rowIds[r])!;
+        const row: string[] = [];
+        for (let c = bounds.c1; c <= bounds.c2; c++) {
+          const col = board.columns.find((x) => x.id === colIds[c])!;
+          row.push(sel.has(`${item.id}|${col.id}`) ? cellCopyText(col, item).replace(/[\t\n]/g, ' ') : '');
+        }
+        lines.push(row.join('\t'));
+      }
+      e.clipboardData?.setData('text/plain', lines.join('\n'));
+      e.preventDefault();
+    };
+
+    const onPaste = (e: ClipboardEvent) => {
+      const { cells, bounds, rowIds, colIds, writeCells } = live.current;
+      if (!cells.length || !bounds || typing()) return;
+      const text = e.clipboardData?.getData('text/plain') ?? '';
+      const grid = text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map((l) => l.split('\t'));
+      e.preventDefault();
+      if (grid.length === 1 && grid[0].length === 1) {
+        // One value fills every highlighted cell.
+        writeCells(cells, (col) => valueFromText(col, grid[0][0]));
+        return;
+      }
+      // A block pastes from the top-left of the selection, spilling over rows/columns as needed.
+      const targets: CellRef[] = [];
+      const values: string[] = [];
+      grid.forEach((line, dr) =>
+        line.forEach((v, dc) => {
+          const itemId = rowIds[bounds.r1 + dr];
+          const colId = colIds[bounds.c1 + dc];
+          if (itemId && colId) {
+            targets.push({ itemId, colId });
+            values.push(v);
+          }
+        }),
+      );
+      writeCells(targets, (col, i) => valueFromText(col, values[i]));
+    };
+
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('paste', onPaste);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('paste', onPaste);
+    };
+  }, []);
 
   const setDraft = (q: ViewQuery) => update((b) => void (b.draft = q));
   const loadView = (id: string) =>
@@ -63,128 +165,141 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <header className="board-header">
-        <input
-          className="board-title"
-          defaultValue={board.name}
-          key={board.name}
-          onBlur={(e) => e.target.value.trim() && update((b) => void (b.name = e.target.value.trim()))}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        />
-        <ViewTabs
-          views={board.views}
-          activeId={activeView.id}
-          dirty={dirty}
-          onSelect={loadView}
-          onRename={(id, name) => update((b) => void (b.views.find((v) => v.id === id)!.name = name))}
-          onDelete={(id) => {
-            if (!confirm('Delete this view?')) return;
-            const next = board.views.find((v) => v.id !== id)!;
-            update((b) => {
-              b.views = b.views.filter((v) => v.id !== id);
-              b.activeViewId = next.id;
-              b.draft = { sort: next.sort, conjunction: next.conjunction, filters: next.filters };
-            });
-          }}
-          onAdd={() =>
-            update((b) => {
-              const id = uid();
-              b.views.push({ id, name: `View ${b.views.length + 1}`, sort: [], conjunction: 'and', filters: [] });
-              b.activeViewId = id;
-              b.draft = { sort: [], conjunction: 'and', filters: [] };
-            })
-          }
-        />
-      </header>
+    <SelectionContext.Provider value={selection}>
+      <div className={`app ${cells.length > 1 ? 'multi' : ''}`}>
+        <header className="board-header">
+          <input
+            className="board-title"
+            defaultValue={board.name}
+            key={board.name}
+            onBlur={(e) => e.target.value.trim() && update((b) => void (b.name = e.target.value.trim()))}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          />
+          <ViewTabs
+            views={board.views}
+            activeId={activeView.id}
+            dirty={dirty}
+            onSelect={loadView}
+            onRename={(id, name) => update((b) => void (b.views.find((v) => v.id === id)!.name = name))}
+            onDelete={(id) => {
+              if (!confirm('Delete this view?')) return;
+              const next = board.views.find((v) => v.id !== id)!;
+              update((b) => {
+                b.views = b.views.filter((v) => v.id !== id);
+                b.activeViewId = next.id;
+                b.draft = { sort: next.sort, conjunction: next.conjunction, filters: next.filters };
+              });
+            }}
+            onAdd={() =>
+              update((b) => {
+                const id = uid();
+                b.views.push({ id, name: `View ${b.views.length + 1}`, sort: [], conjunction: 'and', filters: [] });
+                b.activeViewId = id;
+                b.draft = { sort: [], conjunction: 'and', filters: [] };
+              })
+            }
+          />
+        </header>
 
-      <div className="toolbar">
-        <button
-          className="btn primary"
-          onClick={() =>
-            update((b) => {
-              let g = b.groups[0];
-              if (!g) b.groups.push((g = { id: uid(), name: 'New group', color: GROUP_COLORS[0] }));
-              b.items.unshift({ id: uid(), groupId: g.id, values: { name: 'New task' } });
-            })
-          }
-        >
-          New task
-        </button>
-        <input className="input search" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <button
-          ref={filterBtn}
-          className={`btn ghost ${activeFilters ? 'on' : ''}`}
-          onClick={() => setPanel(panel === 'filter' ? null : 'filter')}
-        >
-          ⛃ Filter{activeFilters ? ` / ${activeFilters}` : ''}
-        </button>
-        <button
-          ref={sortBtn}
-          className={`btn ghost ${board.draft.sort.length ? 'on' : ''}`}
-          onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
-        >
-          ⇅ Sort{board.draft.sort.length ? ` / ${board.draft.sort.length}` : ''}
-        </button>
+        <div className="toolbar">
+          <button
+            className="btn primary"
+            onClick={() =>
+              update((b) => {
+                let g = b.groups[0];
+                if (!g) b.groups.push((g = { id: uid(), name: 'New group', color: GROUP_COLORS[0] }));
+                b.items.unshift({ id: uid(), groupId: g.id, values: { name: 'New task' } });
+              })
+            }
+          >
+            New task
+          </button>
+          <input className="input search" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <button
+            ref={filterBtn}
+            className={`btn ghost ${activeFilters ? 'on' : ''}`}
+            onClick={() => setPanel(panel === 'filter' ? null : 'filter')}
+          >
+            ⛃ Filter{activeFilters ? ` / ${activeFilters}` : ''}
+          </button>
+          <button
+            ref={sortBtn}
+            className={`btn ghost ${board.draft.sort.length ? 'on' : ''}`}
+            onClick={() => setPanel(panel === 'sort' ? null : 'sort')}
+          >
+            ⇅ Sort{board.draft.sort.length ? ` / ${board.draft.sort.length}` : ''}
+          </button>
 
-        {dirty && (
-          <div className="save-bar">
-            <span className="muted small">Unsaved changes</span>
-            <button className="btn primary small" onClick={saveView}>
-              Save to “{activeView.name}”
-            </button>
-            <button className="btn ghost small" onClick={saveAsNew}>
-              Save as new view
-            </button>
-            <button className="btn ghost small" onClick={() => loadView(activeView.id)}>
-              Discard
-            </button>
-          </div>
+          {dirty && (
+            <div className="save-bar">
+              <span className="muted small">Unsaved changes</span>
+              <button className="btn primary small" onClick={saveView}>
+                Save to “{activeView.name}”
+              </button>
+              <button className="btn ghost small" onClick={saveAsNew}>
+                Save as new view
+              </button>
+              <button className="btn ghost small" onClick={() => loadView(activeView.id)}>
+                Discard
+              </button>
+            </div>
+          )}
+
+          <div className="spacer" />
+          <button
+            className="btn ghost small"
+            onClick={() => update((b) => void b.groups.push({ id: uid(), name: 'New group', color: GROUP_COLORS[b.groups.length % GROUP_COLORS.length] }))}
+          >
+            + Add group
+          </button>
+          <button className="btn ghost small" onClick={() => confirm('Reset the board to sample data?') && reset()}>
+            Reset
+          </button>
+        </div>
+
+        {panel === 'filter' && (
+          <Popover anchor={filterBtn} onClose={() => setPanel(null)}>
+            <FilterPanel columns={board.columns} query={board.draft} onChange={setDraft} />
+          </Popover>
+        )}
+        {panel === 'sort' && (
+          <Popover anchor={sortBtn} onClose={() => setPanel(null)}>
+            <SortPanel columns={board.columns} query={board.draft} onChange={setDraft} />
+          </Popover>
         )}
 
-        <div className="spacer" />
-        <button
-          className="btn ghost small"
-          onClick={() => update((b) => void b.groups.push({ id: uid(), name: 'New group', color: GROUP_COLORS[b.groups.length % GROUP_COLORS.length] }))}
-        >
-          + Add group
-        </button>
-        <button className="btn ghost small" onClick={() => confirm('Reset the board to sample data?') && reset()}>
-          Reset
-        </button>
+        <main className="board">
+          {board.groups.map((g) => {
+            const items = groupRows.get(g.id)!;
+            const total = board.items.filter((i) => i.groupId === g.id).length;
+            if (narrowing && !items.length) return null;
+            return (
+              <GroupTable
+                key={g.id}
+                board={board}
+                group={g}
+                items={items}
+                totalInGroup={total}
+                update={update}
+                setCell={setCell}
+                onSortColumn={sortColumn}
+                onFilterColumn={filterColumn}
+              />
+            );
+          })}
+          {narrowing && !visible.length && <div className="empty-state">No items match this filter.</div>}
+        </main>
+
+        {cells.length > 1 && (
+          <BulkBar
+            columns={board.columns}
+            cells={cells}
+            onSet={(colId, v) => writeCells(cells.filter((c) => c.colId === colId), () => v)}
+            onClear={() => writeCells(cells, () => undefined)}
+            onDismiss={selection.clear}
+          />
+        )}
       </div>
-
-      {panel === 'filter' && (
-        <Popover anchor={filterBtn} onClose={() => setPanel(null)}>
-          <FilterPanel columns={board.columns} query={board.draft} onChange={setDraft} />
-        </Popover>
-      )}
-      {panel === 'sort' && (
-        <Popover anchor={sortBtn} onClose={() => setPanel(null)}>
-          <SortPanel columns={board.columns} query={board.draft} onChange={setDraft} />
-        </Popover>
-      )}
-
-      <main className="board">
-        {board.groups.map((g) => {
-          const items = visible.filter((i) => i.groupId === g.id);
-          const total = board.items.filter((i) => i.groupId === g.id).length;
-          if (narrowing && !items.length) return null;
-          return (
-            <GroupTable
-              key={g.id}
-              board={board}
-              group={g}
-              items={items}
-              totalInGroup={total}
-              update={update}
-              onSortColumn={sortColumn}
-              onFilterColumn={filterColumn}
-            />
-          );
-        })}
-        {narrowing && !visible.length && <div className="empty-state">No items match this filter.</div>}
-      </main>
-    </div>
+    </SelectionContext.Provider>
   );
 }

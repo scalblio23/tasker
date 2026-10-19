@@ -1,4 +1,5 @@
-import type { Column, FilterOp, FilterRule, Item, SortRule, UrlValue, ViewQuery } from './types';
+import type { Board, CellValue, Column, FilterOp, FilterRule, Item, SortRule, UrlValue, ViewQuery } from './types';
+import { PALETTE, uid } from './defaults';
 
 export const isOptionColumn = (col: Column) => col.type === 'select' || col.type === 'status';
 
@@ -92,4 +93,43 @@ export function normalizeUrl(url: string) {
   if (!u) return '';
   // Only allow safe schemes; anything else (e.g. javascript:) is treated as a bare host.
   return /^(https?:|mailto:)/i.test(u) ? u : `https://${u}`;
+}
+
+/** Text used when copying a cell — the raw URL for links so it round-trips through paste. */
+export function cellCopyText(col: Column, item: Item): string {
+  const v = item.values[col.id];
+  if (col.type === 'url' && v && typeof v !== 'string') return v.url;
+  return cellText(col, item);
+}
+
+/**
+ * Turn pasted / typed text into a cell value. For select & status columns the text is matched
+ * against label names (case-insensitive) and a new label is added to `col` when none matches.
+ */
+export function valueFromText(col: Column, text: string): CellValue | undefined {
+  const t = text.trim();
+  if (!t) return undefined;
+  if (isOptionColumn(col)) {
+    let o = col.options.find((x) => x.label.trim().toLowerCase() === t.toLowerCase());
+    if (!o) {
+      o = { id: uid(), label: t, color: PALETTE[col.options.length % PALETTE.length] };
+      col.options.push(o);
+    }
+    return o.id;
+  }
+  if (col.type === 'url') return { url: normalizeUrl(t), text: '' };
+  return t;
+}
+
+/** Move a column next to another one. The locked Task column always stays first. */
+export function moveColumn(b: Board, fromId: string, toId: string, side: 'before' | 'after') {
+  if (fromId === toId) return;
+  const from = b.columns.findIndex((c) => c.id === fromId);
+  if (from < 0 || b.columns[from].locked) return;
+  const [col] = b.columns.splice(from, 1);
+  let to = b.columns.findIndex((c) => c.id === toId);
+  if (to < 0) to = b.columns.length;
+  else if (side === 'after') to += 1;
+  const firstFree = b.columns.findIndex((c) => !c.locked);
+  b.columns.splice(Math.max(to, firstFree < 0 ? b.columns.length : firstFree), 0, col);
 }

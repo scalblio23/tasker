@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { Board, CellValue, Column, ColumnType, Group, Item, SortDir, UrlValue } from '../types';
 import type { Mutator } from '../store';
-import { isOptionColumn } from '../logic';
+import { isOptionColumn, moveColumn } from '../logic';
+import { useSelection } from '../selection';
 import { GROUP_COLORS, newColumn, uid } from '../defaults';
 import { ColumnHeader } from './ColumnHeader';
 import { AddColumn } from './AddColumn';
@@ -15,23 +16,21 @@ interface Props {
   items: Item[];
   totalInGroup: number;
   update: Mutator;
+  /** Sets a cell — or every selected cell in that column when the cell is part of a multi-selection. */
+  setCell: (itemId: string, colId: string, v: CellValue | undefined) => void;
   onSortColumn: (columnId: string, dir: SortDir) => void;
   onFilterColumn: (columnId: string) => void;
 }
 
-export function GroupTable({ board, group, items, totalInGroup, update, onSortColumn, onFilterColumn }: Props) {
+export function GroupTable({ board, group, items, totalInGroup, update, setCell, onSortColumn, onFilterColumn }: Props) {
   const { columns } = board;
+  const selection = useSelection();
   const [newName, setNewName] = useState('');
   const template = `6px ${columns.map((c) => `${c.width}px`).join(' ')} 48px`;
   const style = { gridTemplateColumns: template, '--group-color': group.color } as React.CSSProperties;
 
   const setGroup = (patch: Partial<Group>) =>
     update((b) => Object.assign(b.groups.find((g) => g.id === group.id)!, patch));
-
-  const setValue = (itemId: string, colId: string, v: CellValue | undefined) =>
-    update((b) => {
-      b.items.find((i) => i.id === itemId)!.values[colId] = v;
-    });
 
   const addItem = () => {
     const name = newName.trim();
@@ -91,13 +90,16 @@ export function GroupTable({ board, group, items, totalInGroup, update, onSortCo
         <div className="table">
           <div className="row head" style={style}>
             <div className="edge first" />
-            {columns.map((c) => (
+            {columns.map((c, idx) => (
               <ColumnHeader
                 key={c.id}
                 column={c}
                 sortDir={sortFor(c.id)}
                 onSort={(dir) => onSortColumn(c.id, dir)}
                 onFilter={() => onFilterColumn(c.id)}
+                onMoveLeft={!c.locked && idx > 0 && !columns[idx - 1].locked ? () => update((b) => moveColumn(b, c.id, columns[idx - 1].id, 'before')) : undefined}
+                onMoveRight={!c.locked && idx < columns.length - 1 ? () => update((b) => moveColumn(b, c.id, columns[idx + 1].id, 'after')) : undefined}
+                onDropColumn={(fromId, side) => update((b) => moveColumn(b, fromId, c.id, side))}
                 onRename={(name) => update((b) => void (b.columns.find((x) => x.id === c.id)!.name = name))}
                 onDelete={() => {
                   if (!confirm(`Delete column "${c.name}"?`)) return;
@@ -115,8 +117,14 @@ export function GroupTable({ board, group, items, totalInGroup, update, onSortCo
             <div className="row" style={style} key={item.id}>
               <div className="edge" />
               {columns.map((c) => (
-                <div className={`cell ${c.locked ? 'name-col' : ''} type-${c.type}`} key={c.id}>
-                  {renderCell(c, item, (v) => setValue(item.id, c.id, v), (opts) =>
+                <div
+                  className={`cell ${c.locked ? 'name-col' : ''} type-${c.type} ${selection.isSelected(item.id, c.id) ? 'selected' : ''}`}
+                  key={c.id}
+                  data-cell
+                  onMouseDown={(e) => selection.onCellMouseDown(e, item.id, c.id)}
+                  onMouseEnter={() => selection.onCellMouseEnter(item.id, c.id)}
+                >
+                  {renderCell(c, item, (v) => setCell(item.id, c.id, v), (opts) =>
                     update((b) => void (b.columns.find((x) => x.id === c.id)!.options = opts)),
                   )}
                   {c.locked && (

@@ -225,3 +225,32 @@ select.conj { color: var(--text); }
   .panel-row { grid-template-columns: 1fr 1fr; }
   .panel-row.sort { grid-template-columns: 1fr 1fr; }
 }
+
+/* ---------- column reordering ---------- */
+.col-header.draggable { cursor: grab; }
+.col-header.draggable:active { cursor: grabbing; }
+.col-header.drop-before { box-shadow: inset 3px 0 0 var(--primary); }
+.col-header.drop-after { box-shadow: inset -3px 0 0 var(--primary); }
+
+/* ---------- multi-cell selection ---------- */
+.cell.selected::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.app.multi .cell.selected::after { background: rgba(0, 115, 234, 0.14); }
+.app.multi { user-select: none; }
+.app.multi input { user-select: text; }
+
+.bulk-bar {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50;
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px 8px 8px; max-width: calc(100vw - 32px);
+  background: var(--surface); border-radius: 8px; overflow-x: auto;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+.bulk-count {
+  background: var(--primary); color: #fff; font-weight: 600; min-width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0 8px;
+}
+.bulk-label { white-space: nowrap; padding: 0 6px; line-height: 1.2; }
+.bulk-sep { width: 1px; align-self: stretch; background: var(--grid); margin: 0 4px; }
+.input.full { width: 100%; }
