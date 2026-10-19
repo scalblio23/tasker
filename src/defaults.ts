@@ -25,6 +25,11 @@ export const defaultUsers = (): User[] =>
 
 const WIDTHS: Record<Column['type'], number> = { text: 180, select: 150, status: 150, url: 200, people: 140, time: 170 };
 
+export const MIN_WIDTH = 70;
+export const MAX_WIDTH = 800;
+/** Width a column returns to when its resize handle is double-clicked. */
+export const defaultWidth = (col: Column) => (col.locked ? 300 : WIDTHS[col.type]);
+
 export const newColumn = (name: string, type: Column['type']): Column => ({
   id: uid(),
   name,

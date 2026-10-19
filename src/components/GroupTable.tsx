@@ -114,6 +114,7 @@ export function GroupTable(props: Props) {
                 onMoveLeft={!c.locked && idx > 0 && !columns[idx - 1].locked ? () => update((b) => moveColumn(b, c.id, columns[idx - 1].id, 'before')) : undefined}
                 onMoveRight={!c.locked && idx < columns.length - 1 ? () => update((b) => moveColumn(b, c.id, columns[idx + 1].id, 'after')) : undefined}
                 onDropColumn={(fromId, side) => update((b) => moveColumn(b, fromId, c.id, side))}
+                onResize={(width) => update((b) => void (b.columns.find((x) => x.id === c.id)!.width = width))}
                 onRename={(name) => update((b) => void (b.columns.find((x) => x.id === c.id)!.name = name))}
                 onDelete={() => {
                   if (!confirm(`Delete column "${c.name}"?`)) return;

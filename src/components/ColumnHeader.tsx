@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Column, SortDir } from '../types';
 import { Popover } from './Popover';
+import { MAX_WIDTH, MIN_WIDTH, defaultWidth } from '../defaults';
 
 /** Column currently being dragged (dataTransfer can't be read during dragover). */
 let draggingId: string | null = null;
@@ -19,15 +20,38 @@ interface Props {
   onMoveRight?: () => void;
   /** Another column was dropped on this header. */
   onDropColumn: (fromId: string, side: 'before' | 'after') => void;
+  onResize: (width: number) => void;
 }
 
 export function ColumnHeader(props: Props) {
-  const { column, sortDir, onSort, onFilter, onRename, onDelete, onMoveLeft, onMoveRight, onDropColumn } = props;
+  const { column, sortDir, onSort, onFilter, onRename, onDelete, onMoveLeft, onMoveRight, onDropColumn, onResize } = props;
   const menuRef = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [dropSide, setDropSide] = useState<'before' | 'after' | null>(null);
   const draggable = !column.locked && !renaming;
+
+  const startResize = (e: React.MouseEvent) => {
+    // preventDefault also stops the header's native drag-to-reorder from starting.
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = column.width;
+    const min = column.locked ? 160 : MIN_WIDTH;
+    let frame = 0;
+    const move = (ev: MouseEvent) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => onResize(Math.round(Math.min(MAX_WIDTH, Math.max(min, startW + ev.clientX - startX)))));
+    };
+    const up = () => {
+      document.body.classList.remove('col-resizing');
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.body.classList.add('col-resizing');
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
 
   const act = (fn: () => void) => () => {
     setMenu(false);
@@ -82,6 +106,13 @@ export function ColumnHeader(props: Props) {
       <button ref={menuRef} className="col-menu-btn" onClick={() => setMenu(!menu)} aria-label="Column menu">
         ⋯
       </button>
+      <span
+        className="col-resize"
+        onMouseDown={startResize}
+        onDoubleClick={() => onResize(defaultWidth(column))}
+        title="Drag to resize · double-click to reset"
+        aria-hidden="true"
+      />
       {menu && (
         <Popover anchor={menuRef} onClose={() => setMenu(false)} align="right" className="menu">
           <div className="menu-label">{TYPE_LABEL[column.type]} column</div>
