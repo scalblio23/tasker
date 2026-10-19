@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CellValue, Item, SortDir, ViewQuery } from './types';
 import { useBoard } from './store';
 import { applyQuery, cellCopyText, isActiveRule, isEditable, makeCtx, sameQuery, valueFromText } from './logic';
@@ -36,12 +36,18 @@ export default function App() {
   // Rows per group as rendered, and the flat row/column order the cell selection works over.
   const groupRows = useMemo(() => {
     const m = new Map<string, Item[]>(board.groups.map((g) => [g.id, []]));
-    visible.forEach((i) => m.get(i.groupId)?.push(i));
+    visible.top.forEach((i) => m.get(i.groupId)?.push(i));
     return m;
   }, [board.groups, visible]);
+  const isOpen = useCallback((i: Item) => !!i.open || visible.forcedOpen.has(i.id), [visible]);
   const rowIds = useMemo(
-    () => board.groups.filter((g) => !g.collapsed).flatMap((g) => groupRows.get(g.id)!.map((i) => i.id)),
-    [board.groups, groupRows],
+    () =>
+      board.groups
+        .filter((g) => !g.collapsed)
+        .flatMap((g) =>
+          groupRows.get(g.id)!.flatMap((i) => [i.id, ...(isOpen(i) ? (visible.children.get(i.id) ?? []).map((c) => c.id) : [])]),
+        ),
+    [board.groups, groupRows, visible, isOpen],
   );
   const colIds = useMemo(() => board.columns.map((c) => c.id), [board.columns]);
   const selection = useCellSelection(rowIds, colIds);
@@ -313,7 +319,7 @@ export default function App() {
             <main className="board">
               {board.groups.map((g) => {
                 const items = groupRows.get(g.id)!;
-                const total = board.items.filter((i) => i.groupId === g.id).length;
+                const total = board.items.filter((i) => i.groupId === g.id && !i.parentId).length;
                 if (narrowing && !items.length) return null;
                 return (
                   <GroupTable
@@ -321,6 +327,8 @@ export default function App() {
                     board={board}
                     group={g}
                     items={items}
+                    subtasks={visible.children}
+                    isOpen={isOpen}
                     totalInGroup={total}
                     update={update}
                     setCell={setCell}
@@ -329,7 +337,7 @@ export default function App() {
                   />
                 );
               })}
-              {narrowing && !visible.length && <div className="empty-state">No items match this filter.</div>}
+              {narrowing && !visible.top.length && <div className="empty-state">No items match this filter.</div>}
             </main>
           </>
         )}

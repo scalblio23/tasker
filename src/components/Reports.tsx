@@ -51,7 +51,12 @@ export function Reports({ board, update }: { board: Board; update: Mutator }) {
   const byUser = sumBy((e) => e.userId);
   const byTask = sumBy((e) => e.itemId);
   const maxUser = Math.max(1, ...byUser.map(([, ms]) => ms));
-  const taskName = (id: string) => String(itemById.get(id)?.values.name || (itemById.has(id) ? 'Untitled task' : 'Deleted task'));
+  const nameOf = (id: string) => String(itemById.get(id)?.values.name || (itemById.has(id) ? 'Untitled task' : 'Deleted task'));
+  /** Subtasks read "Parent › Subtask". */
+  const taskName = (id: string) => {
+    const parent = itemById.get(id)?.parentId;
+    return parent ? `${nameOf(parent)} › ${nameOf(id)}` : nameOf(id);
+  };
 
   const exportCsv = () => {
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;

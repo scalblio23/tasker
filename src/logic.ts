@@ -79,21 +79,52 @@ function matchRule(rule: FilterRule, col: Column, item: Item, ctx: CellCtx): boo
   }
 }
 
-export function applyQuery(items: Item[], columns: Column[], q: ViewQuery, search: string, ctx: CellCtx): Item[] {
+export interface QueryResult {
+  /** Top-level tasks to show, sorted. */
+  top: Item[];
+  /** Subtasks to show per parent id, sorted. */
+  children: Map<string, Item[]>;
+  /** Parents shown only because a subtask matched — expanded so the match is visible. */
+  forcedOpen: Set<string>;
+}
+
+/**
+ * Filter + sort. A task shows when it or any of its subtasks match; a matching task shows all of
+ * its subtasks, otherwise only the matching ones. Subtasks sort within their parent.
+ */
+export function applyQuery(items: Item[], columns: Column[], q: ViewQuery, search: string, ctx: CellCtx): QueryResult {
   const byId = new Map(columns.map((c) => [c.id, c]));
   const rules = q.filters.filter((r) => isActiveRule(r, columns));
   const needle = search.trim().toLowerCase();
 
-  let out = items.filter((item) => {
+  const matches = (item: Item) => {
     if (needle && !columns.some((c) => cellText(c, item, ctx).toLowerCase().includes(needle))) return false;
     if (!rules.length) return true;
     const results = rules.map((r) => matchRule(r, byId.get(r.columnId)!, item, ctx));
     return q.conjunction === 'and' ? results.every(Boolean) : results.some(Boolean);
-  });
+  };
 
   const sorts = q.sort.filter((s) => byId.has(s.columnId));
-  if (sorts.length) out = [...out].sort((a, b) => compareItems(a, b, sorts, byId, ctx));
-  return out;
+  const sort = (list: Item[]) => (sorts.length ? [...list].sort((a, b) => compareItems(a, b, sorts, byId, ctx)) : list);
+
+  const ids = new Set(items.map((i) => i.id));
+  const subsOf = new Map<string, Item[]>();
+  for (const i of items) if (i.parentId && ids.has(i.parentId)) subsOf.set(i.parentId, [...(subsOf.get(i.parentId) ?? []), i]);
+
+  const top: Item[] = [];
+  const children = new Map<string, Item[]>();
+  const forcedOpen = new Set<string>();
+  for (const item of items) {
+    if (item.parentId && ids.has(item.parentId)) continue;
+    const subs = subsOf.get(item.id) ?? [];
+    const self = matches(item);
+    const shownSubs = self ? subs : subs.filter(matches);
+    if (!self && !shownSubs.length) continue;
+    top.push(item);
+    if (subs.length) children.set(item.id, sort(shownSubs));
+    if (!self) forcedOpen.add(item.id);
+  }
+  return { top: sort(top), children, forcedOpen };
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });

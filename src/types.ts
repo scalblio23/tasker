@@ -44,6 +44,10 @@ export interface TimeEntry {
 export interface Item {
   id: string;
   groupId: string;
+  /** Set on subtasks: the task they belong to (same group). */
+  parentId?: string;
+  /** Whether a task's subtasks are expanded. */
+  open?: boolean;
   values: Record<string, CellValue | undefined>;
 }
 

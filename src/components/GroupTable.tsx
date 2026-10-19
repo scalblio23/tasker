@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Board, CellValue, Column, ColumnType, Group, Item, SortDir, UrlValue } from '../types';
 import type { Mutator } from '../store';
 import { isOptionColumn, moveColumn } from '../logic';
@@ -17,7 +17,11 @@ import { formatDuration, totalMs } from '../time';
 interface Props {
   board: Board;
   group: Group;
+  /** Top-level tasks to show. */
   items: Item[];
+  /** Visible subtasks per task id. */
+  subtasks: Map<string, Item[]>;
+  isOpen: (item: Item) => boolean;
   totalInGroup: number;
   update: Mutator;
   /** Sets a cell — or every selected cell in that column when the cell is part of a multi-selection. */
@@ -26,10 +30,16 @@ interface Props {
   onFilterColumn: (columnId: string) => void;
 }
 
-export function GroupTable({ board, group, items, totalInGroup, update, setCell, onSortColumn, onFilterColumn }: Props) {
+export function GroupTable(props: Props) {
+  const { board, group, items, subtasks, isOpen, totalInGroup, update, onSortColumn, onFilterColumn } = props;
   const { columns } = board;
-  const selection = useSelection();
   const [newName, setNewName] = useState('');
+  // Subtask counts include ones hidden by a filter, so the toggle always tells the truth.
+  const subCount = useMemo(() => {
+    const m = new Map<string, number>();
+    board.items.forEach((i) => i.parentId && m.set(i.parentId, (m.get(i.parentId) ?? 0) + 1));
+    return m;
+  }, [board.items]);
   const template = `6px ${columns.map((c) => `${c.width}px`).join(' ')} 48px`;
   const style = { gridTemplateColumns: template, '--group-color': group.color } as React.CSSProperties;
 
@@ -117,32 +127,22 @@ export function GroupTable({ board, group, items, totalInGroup, update, setCell,
             <AddColumn onAdd={addColumn} />
           </div>
 
-          {items.map((item) => (
-            <div className="row" style={style} key={item.id}>
-              <div className="edge" />
-              {columns.map((c) => (
-                <div
-                  className={`cell ${c.locked ? 'name-col' : ''} type-${c.type} ${selection.isSelected(item.id, c.id) ? 'selected' : ''}`}
-                  key={c.id}
-                  data-cell
-                  onMouseDown={(e) => selection.onCellMouseDown(e, item.id, c.id)}
-                  onMouseEnter={() => selection.onCellMouseEnter(item.id, c.id)}
-                >
-                  {renderCell(c, item, board, update, (v) => setCell(item.id, c.id, v))}
-                  {c.locked && (
-                    <button
-                      className="row-delete"
-                      title="Delete item"
-                      onClick={() => update((b) => void (b.items = b.items.filter((i) => i.id !== item.id)))}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
-              <div className="cell filler" />
-            </div>
-          ))}
+          {items.map((item) => {
+            const open = isOpen(item);
+            return (
+              <div key={item.id} className={open ? 'task-block open' : 'task-block'}>
+                <ItemRow {...props} item={item} style={style} subCount={subCount.get(item.id) ?? 0} open={open} />
+                {open && (
+                  <>
+                    {(subtasks.get(item.id) ?? []).map((sub) => (
+                      <ItemRow {...props} key={sub.id} item={sub} style={style} subCount={0} open={false} />
+                    ))}
+                    <AddSubtask style={style} groupId={group.id} parentId={item.id} update={update} />
+                  </>
+                )}
+              </div>
+            );
+          })}
 
           <div className="row add-row" style={style}>
             <div className="edge faded" />
@@ -170,6 +170,89 @@ export function GroupTable({ board, group, items, totalInGroup, update, setCell,
         </div>
       )}
     </section>
+  );
+}
+
+interface RowProps extends Props {
+  item: Item;
+  style: React.CSSProperties;
+  subCount: number;
+  open: boolean;
+}
+
+function ItemRow({ board, item, style, subCount, open, update, setCell }: RowProps) {
+  const selection = useSelection();
+  const isSub = !!item.parentId;
+  return (
+    <div className={`row ${isSub ? 'sub' : ''}`} style={style}>
+      <div className="edge" />
+      {board.columns.map((c) => (
+        <div
+          className={`cell ${c.locked ? 'name-col' : ''} type-${c.type} ${selection.isSelected(item.id, c.id) ? 'selected' : ''}`}
+          key={c.id}
+          data-cell
+          onMouseDown={(e) => selection.onCellMouseDown(e, item.id, c.id)}
+          onMouseEnter={() => selection.onCellMouseEnter(item.id, c.id)}
+        >
+          {c.locked && isSub && <span className="sub-elbow" aria-hidden="true" />}
+          {renderCell(c, item, board, update, (v) => setCell(item.id, c.id, v))}
+          {c.locked && !isSub && (
+            <button
+              className={`sub-toggle ${subCount ? 'has' : ''} ${open ? 'open' : ''}`}
+              title={open ? 'Hide subtasks' : subCount ? `Show ${subCount} subtask${subCount === 1 ? '' : 's'}` : 'Add subtask'}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => update((b) => void (b.items.find((i) => i.id === item.id)!.open = !open))}
+            >
+              {subCount ? (
+                <>
+                  <span className="chev">{open ? '▾' : '▸'}</span> {subCount}
+                </>
+              ) : (
+                '+ Sub'
+              )}
+            </button>
+          )}
+          {c.locked && (
+            <button
+              className="row-delete"
+              title={subCount ? `Delete task and its ${subCount} subtask${subCount === 1 ? '' : 's'}` : isSub ? 'Delete subtask' : 'Delete task'}
+              onClick={() =>
+                update((b) => void (b.items = b.items.filter((i) => i.id !== item.id && i.parentId !== item.id)))
+              }
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      ))}
+      <div className="cell filler" />
+    </div>
+  );
+}
+
+function AddSubtask({ style, groupId, parentId, update }: { style: React.CSSProperties; groupId: string; parentId: string; update: Mutator }) {
+  const [name, setName] = useState('');
+  const add = () => {
+    const n = name.trim();
+    if (!n) return;
+    update((b) => void b.items.push({ id: uid(), groupId, parentId, values: { name: n } }));
+    setName('');
+  };
+  return (
+    <div className="row add-row sub" style={style}>
+      <div className="edge faded" />
+      <div className="cell name-col">
+        <span className="sub-elbow" aria-hidden="true" />
+        <input
+          className="cell-input"
+          placeholder="+ Add subtask"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={add}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -228,9 +311,10 @@ function Distribution({ column, items }: { column: Column; items: Item[] }) {
   );
 }
 
-/** Total time tracked on a group's (visible) items. */
+/** Total time tracked on a group's (visible) tasks, including their subtasks. */
 function GroupTime({ board, items }: { board: Board; items: Item[] }) {
   const ids = new Set(items.map((i) => i.id));
+  board.items.forEach((i) => i.parentId && ids.has(i.parentId) && ids.add(i.id));
   const ms = totalMs(board.timeEntries, Date.now(), (e) => ids.has(e.itemId));
   return ms ? <div className="group-time">{formatDuration(ms)}</div> : null;
 }

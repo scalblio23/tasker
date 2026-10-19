@@ -1,4 +1,4 @@
-import type { Board, Column, SelectOption, User } from './types';
+import type { Board, Column, Item, SelectOption, User } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -58,24 +58,32 @@ export function sampleBoard(): Board {
   const g1 = { id: uid(), name: 'This week', color: GROUP_COLORS[0] };
   const g2 = { id: uid(), name: 'Next week', color: GROUP_COLORS[1] };
 
-  const row = (groupId: string, n: string, who: string[], c: string, d: string, p: string, s: string, url = '') => ({
+  const row = (groupId: string, n: string, who: string[], c: string, d: string, p: string, s: string, url = ''): Item => ({
     id: uid(),
     groupId,
     values: { name: n, person: who, client: c, dept: d, priority: p, status: s, link: url ? { url, text: '' } : undefined },
   });
 
+  const items = [
+    row(g1.id, 'Launch campaign', charles, 'Acme Co', marketing.id, medium.id, working.id, 'https://example.com/campaign'),
+    row(g1.id, 'Quarterly pipeline review', jem, 'Globex', sales.id, high.id, stuck.id),
+    row(g1.id, 'Send overdue invoices', cody, 'Initech', billing.id, high.id, done.id),
+    row(g2.id, 'Roadmap workshop', byrone, 'Umbrella', product.id, high.id, '', 'https://example.com/roadmap'),
+    row(g2.id, 'Fix login bug', cody, 'Acme Co', dev.id, medium.id, working.id),
+    row(g2.id, 'Feature spec', [], 'Hooli', product.id, medium.id, ''),
+  ];
+  const sub = (parent: (typeof items)[number], n: string, who: string[], s: string) => ({
+    ...row(parent.groupId, n, who, '', '', '', s),
+    parentId: parent.id,
+  });
+  items[0].open = true;
+  items.push(sub(items[0], 'Write ad copy', jem, done.id), sub(items[0], 'Design banners', charles, working.id));
+
   return {
     name: 'My Tasks',
     columns: [name, person, client, dept, priority, status, time, link],
     groups: [g1, g2],
-    items: [
-      row(g1.id, 'Launch campaign', charles, 'Acme Co', marketing.id, medium.id, working.id, 'https://example.com/campaign'),
-      row(g1.id, 'Quarterly pipeline review', jem, 'Globex', sales.id, high.id, stuck.id),
-      row(g1.id, 'Send overdue invoices', cody, 'Initech', billing.id, high.id, done.id),
-      row(g2.id, 'Roadmap workshop', byrone, 'Umbrella', product.id, high.id, '', 'https://example.com/roadmap'),
-      row(g2.id, 'Fix login bug', cody, 'Acme Co', dev.id, medium.id, working.id),
-      row(g2.id, 'Feature spec', [], 'Hooli', product.id, medium.id, ''),
-    ],
+    items,
     views: [{ id: 'main', name: 'Main table', sort: [], conjunction: 'and', filters: [] }],
     activeViewId: 'main',
     draft: { sort: [], conjunction: 'and', filters: [] },
