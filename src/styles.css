@@ -316,7 +316,6 @@ select.conj { color: var(--text); }
 .time-cell:hover .time-total .placeholder { color: var(--muted); }
 .time-cell.running .time-total { color: #d83a52; font-weight: 600; }
 .time-cell.running { background: #fff0f2; }
-.others-dot { width: 7px; height: 7px; border-radius: 50%; background: #fdab3d; flex: none; }
 .group-time { width: 100%; text-align: center; font-weight: 600; font-size: 13px; }
 
 .time-pop { width: 340px; }
@@ -358,3 +357,14 @@ select.conj { color: var(--text); }
   .reports { padding: 0 16px 48px; }
   .report-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- time attribution ---------- */
+.user-btn.unset { border-color: #fdab3d; background: #fff7e6; }
+.time-by-user { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.time-user-chip {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 8px 2px 2px;
+  background: var(--hover); border-radius: 12px;
+}
+.entry-user { border: 1px solid transparent; background: none; padding: 0; margin-left: -2px; font-weight: 500; border-radius: 4px; }
+.entry-user:hover { border-color: var(--border); }
+.time-cell .avatar-stack .avatar + .avatar { margin-left: -6px; }

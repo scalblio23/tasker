@@ -80,7 +80,8 @@ export function sampleBoard(): Board {
     activeViewId: 'main',
     draft: { sort: [], conjunction: 'and', filters: [] },
     users,
-    currentUserId: users[0].id,
+    // Empty until the person on this device says who they are, so time is never logged under the wrong name.
+    currentUserId: '',
     timeEntries: [],
   };
 }
@@ -94,7 +95,7 @@ export function migrateBoard(b: Board): Board {
       b.columns.splice(firstFree < 0 ? b.columns.length : firstFree, 0, newColumn('Person', 'people'));
     if (!b.columns.some((c) => c.type === 'time')) b.columns.push(newColumn('Time tracking', 'time'));
   }
-  if (!b.users.some((u) => u.id === b.currentUserId)) b.currentUserId = b.users[0]?.id ?? '';
+  if (!b.users.some((u) => u.id === b.currentUserId)) b.currentUserId = '';
   b.timeEntries ??= [];
   return b;
 }

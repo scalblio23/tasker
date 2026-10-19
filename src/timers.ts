@@ -3,6 +3,7 @@ import { uid } from './defaults';
 
 /** Start a timer for `userId` on an item, stopping any timer that user already has running. */
 export function startTimer(b: Board, itemId: string, userId: string, now = Date.now()) {
+  if (!b.users.some((u) => u.id === userId)) return; // every entry must belong to a real user
   stopTimers(b, userId, now);
   b.timeEntries.push({ id: uid(), itemId, userId, start: now, end: null });
 }
@@ -14,5 +15,6 @@ export function stopTimers(b: Board, userId: string, now = Date.now(), itemId?: 
 }
 
 export function addManualEntry(b: Board, itemId: string, userId: string, ms: number, now = Date.now()) {
+  if (!b.users.some((u) => u.id === userId)) return;
   b.timeEntries.push({ id: uid(), itemId, userId, start: now - ms, end: now });
 }

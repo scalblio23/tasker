@@ -18,18 +18,17 @@ export function UserMenu({ board, update }: { board: Board; update: Mutator }) {
     if (!n) return;
     update((b) => {
       b.users.push({ id: uid(), name: n, color: USER_COLORS[b.users.length % USER_COLORS.length] });
-      if (!b.currentUserId) b.currentUserId = b.users[0].id;
     });
     setName('');
   };
 
   return (
     <>
-      <button ref={ref} className="user-btn" onClick={() => setOpen(!open)}>
+      <button ref={ref} className={`user-btn ${me ? '' : 'unset'}`} onClick={() => setOpen(!open)}>
         {me ? <Avatar user={me} size={24} /> : <span className="avatar empty">?</span>}
         <span>
           <span className="muted small block">Tracking as</span>
-          {me?.name ?? 'Pick a user'}
+          {me?.name ?? 'Who are you?'}
         </span>
         <span className="muted">▾</span>
       </button>
@@ -63,7 +62,7 @@ export function UserMenu({ board, update }: { board: Board; update: Mutator }) {
                     for (const i of b.items)
                       for (const [k, v] of Object.entries(i.values))
                         if (Array.isArray(v)) i.values[k] = v.filter((id) => id !== u.id);
-                    if (b.currentUserId === u.id) b.currentUserId = b.users[0]?.id ?? '';
+                    if (b.currentUserId === u.id) b.currentUserId = '';
                   });
                 }}
               >

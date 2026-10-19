@@ -197,9 +197,11 @@ function renderCell(c: Column, item: Item, board: Board, update: Mutator, onChan
           entries={board.timeEntries.filter((e) => e.itemId === item.id)}
           users={board.users}
           currentUserId={me}
-          onStart={() => update((b) => startTimer(b, item.id, me))}
+          onStart={(userId) => update((b) => startTimer(b, item.id, userId))}
           onStop={() => update((b) => stopTimers(b, me, Date.now(), item.id))}
+          onSetCurrentUser={(userId) => update((b) => void (b.currentUserId = userId))}
           onAdd={(ms, userId) => update((b) => addManualEntry(b, item.id, userId, ms))}
+          onReassign={(id, userId) => update((b) => void (b.timeEntries.find((e) => e.id === id)!.userId = userId))}
           onDelete={(id) => update((b) => void (b.timeEntries = b.timeEntries.filter((e) => e.id !== id)))}
         />
       );
