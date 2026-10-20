@@ -56,6 +56,12 @@ same task, don't overwrite each other. Clients poll every 3 s while in use and e
 *Tracking as*, unsaved sort/filter and expanded subtasks stay per person. Attachments upload
 straight from the browser to Vercel Blob via `api/upload.ts`; their URLs are public but unguessable.
 
+**Backups and restore.** Before this browser's board is ever replaced (joining a shared board,
+sharing, restoring), a copy is saved locally; the first copy is kept for good plus the latest few.
+When a browser with tasks the shared board doesn't have connects, it asks whether to add them.
+The board's **⋯** menu can download a JSON copy and restore tasks from a backup or a file —
+restoring only adds missing tasks (matching people by name and labels by text), never deletes.
+
 Troubleshooting: open `https://<your-app>/api/sync?full=1`. `{"configured":true,…}` means sharing is on;
 `{"configured":false}` means the Redis variables aren't reaching the deployment (redeploy); a page of
 HTML or a 404 means the deployment doesn't include the `api/` folder (wrong branch). If the badge shows

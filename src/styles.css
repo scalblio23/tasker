@@ -451,3 +451,6 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .passcode-card p { margin: 0; }
 .sync-badge.error { background: #fff0f2; color: #d83a52; cursor: help; }
 .sync-badge.error .sync-dot { background: #e2445c; }
+.board-menu-btn { font-size: 18px; padding: 2px 8px; }
+.board-menu { width: 360px; }
+.menu > button:disabled { opacity: 0.55; cursor: default; }

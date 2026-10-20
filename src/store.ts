@@ -4,10 +4,11 @@ import { ensurePositions, migrateBoard, sampleBoard } from './defaults';
 import { collectGarbage, uploadLocalFiles } from './files';
 import { fileRefs } from './logic';
 import { PASSCODE_KEY, syncConfig } from './syncConfig';
+import { mergeBoards, saveBackup } from './backup';
 import { applyRemote, boardFromSnapshot, boardToChanges, diffBoard, mergeChange, type Change } from './sync';
 
 const KEY = 'tasker.board.v1';
-const BACKUP_KEY = 'tasker.board.local-backup';
+const JOIN_ASKED_KEY = 'tasker.join-merge-asked';
 const POLL_MS = 3000;
 /** Slower polling while nobody is using the tab, to keep shared-storage requests (and cost) down. */
 const IDLE_POLL_MS = 15000;
@@ -200,16 +201,42 @@ export function useBoard() {
     st.rev = data.rev;
 
     if (!seeding) {
-      // Join the existing shared board; keep a copy of what this browser had, just in case.
+      // Join the existing shared board. First keep a copy of what this browser had (never overwritten).
+      const local = boardRef.current;
+      saveBackup(local, 'Before loading the shared board');
+      const shared = boardFromSnapshot(local, data.entities);
+      commit(shared);
+
+      // Tasks only this browser has would otherwise vanish from view — offer to add them (once).
+      const sharedIds = new Set(shared.items.map((i) => i.id));
+      const localOnly = local.items.filter((i) => !sharedIds.has(i.id) && !i.parentId);
+      let asked = false;
       try {
-        localStorage.setItem(BACKUP_KEY, JSON.stringify(boardRef.current));
+        asked = localStorage.getItem(JOIN_ASKED_KEY) === '1';
       } catch {
         /* ignore */
       }
-      commit(boardFromSnapshot(boardRef.current, data.entities));
+      if (localOnly.length && !asked) {
+        const examples = localOnly.slice(0, 3).map((i) => `“${String(i.values.name || 'Untitled')}”`).join(', ');
+        const ok = confirm(
+          `This browser has ${localOnly.length} task${localOnly.length === 1 ? '' : 's'} that aren't on the shared board ` +
+            `(${examples}${localOnly.length > 3 ? ', …' : ''}).\n\nAdd them to the shared board so everyone can see them?\n\n` +
+            `(Either way a copy is kept — board menu ⋯ → Restore.)`,
+        );
+        try {
+          localStorage.setItem(JOIN_ASKED_KEY, '1');
+        } catch {
+          /* ignore */
+        }
+        if (ok) {
+          const source = syncConfig.files ? await uploadLocalFiles(local) : local;
+          update((b) => void mergeBoards(b, source));
+        }
+      }
     } else {
       // First device to connect: this browser's board becomes the shared one.
       let seed = boardRef.current;
+      saveBackup(seed, 'Before sharing this board');
       if (syncConfig.files) seed = await uploadLocalFiles(seed);
       commit(seed);
       enqueue(boardToChanges(seed));

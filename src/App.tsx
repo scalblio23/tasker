@@ -13,6 +13,7 @@ import { Reports } from './components/Reports';
 import { TimerChip } from './components/TimerChip';
 import { UserMenu } from './components/UserMenu';
 import { PasscodeScreen, SyncBadge } from './components/SyncBadge';
+import { BoardMenu } from './components/BoardMenu';
 
 type Panel = 'filter' | 'sort' | null;
 
@@ -194,6 +195,7 @@ export default function App() {
               onBlur={(e) => e.target.value.trim() && update((b) => void (b.name = e.target.value.trim()))}
               onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
             />
+            <BoardMenu board={board} update={update} />
             <SyncBadge status={status} error={error} />
             <div className="spacer" />
             <TimerChip board={board} update={update} />
