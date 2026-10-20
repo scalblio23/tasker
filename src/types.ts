@@ -25,6 +25,8 @@ export interface UrlValue {
 /** Attachment metadata; the file itself is stored in IndexedDB under `id`. */
 export interface FileRef {
   id: string;
+  /** Set when the file lives in shared storage (Vercel Blob); otherwise it's in this browser's IndexedDB. */
+  url?: string;
   name: string;
   size: number;
   type: string;
@@ -58,8 +60,10 @@ export interface Item {
   groupId: string;
   /** Set on subtasks: the task they belong to (same group). */
   parentId?: string;
-  /** Whether a task's subtasks are expanded. */
+  /** Whether a task's subtasks are expanded (per device, not synced). */
   open?: boolean;
+  /** Sort key for row order, so order survives syncing items individually. */
+  pos?: number;
   values: Record<string, CellValue | undefined>;
 }
 

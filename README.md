@@ -30,4 +30,32 @@ npm run build    # typecheck + production build into dist/
   - press Delete/Backspace to clear, Cmd/Ctrl+C to copy, Cmd/Ctrl+V to paste (one value fills them all; a block from a spreadsheet pastes from the top-left cell, and unknown dropdown labels are created)
 - Group summary bars showing the label split for each Dropdown/Status column.
 
-Data is saved in the browser (`localStorage`, attachments in IndexedDB); *Reset* restores the sample board.
+## Sharing the board with your team
+
+Out of the box everything is saved in each person's browser, so nobody else sees it. Connect
+shared storage on Vercel and everyone works on the same board, with changes showing up for
+others within a few seconds. The badge next to the board title shows the mode: **Synced**, or
+**This browser only** when shared storage isn't connected.
+
+1. In your Vercel project open **Storage → Create Database**, pick **Upstash for Redis** (Marketplace),
+   and connect it to this project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+2. For shared attachments, also create a **Blob** store and connect it (adds `BLOB_READ_WRITE_TOKEN`).
+   Without it, attachments stay in the browser that uploaded them.
+3. Optional: under **Settings → Environment Variables** add `TASKER_PASSCODE`. Everyone enters it once
+   per browser. Without it, anyone with the URL can open the board.
+4. **Redeploy** (new environment variables only apply to new deployments).
+5. **Open the app in the browser that has the real board first.** The first browser to connect is asked
+   whether to share its board; say yes there. Everyone who opens it afterwards loads the shared
+   board (their old local copy is kept in `localStorage` under `tasker.board.local-backup`).
+
+How it works: `api/sync.ts` (a Vercel Function) stores the board in Redis as separate entities
+(each task, each time entry, the column list, …). Clients send only what changed — a single cell
+edit is a field-level patch — so two people editing different things, even different cells of the
+same task, don't overwrite each other. Clients poll every 3 s while in use and every 15 s when idle.
+*Tracking as*, unsaved sort/filter and expanded subtasks stay per person. Attachments upload
+straight from the browser to Vercel Blob via `api/upload.ts`; their URLs are public but unguessable.
+
+`npm run dev` serves the same API with an in-memory store, so you can try sharing between two
+local browser windows. See `.env.example` for all settings.
+
+In local-only mode, *Reset* restores the sample board (it's hidden on a shared board).

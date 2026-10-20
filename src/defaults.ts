@@ -84,6 +84,7 @@ export function sampleBoard(): Board {
   });
   items[0].open = true;
   items.push(sub(items[0], 'Write ad copy', jem, done.id), sub(items[0], 'Design banners', charles, working.id));
+  items.forEach((it, i) => (it.pos = i * 1024));
 
   return {
     version: BOARD_VERSION,
@@ -103,6 +104,19 @@ export function sampleBoard(): Board {
 
 export const BOARD_VERSION = 2;
 
+/** Give new items a `pos` between their neighbours in the array, keeping existing ones stable. */
+export function ensurePositions(b: Board) {
+  const items = b.items;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].pos != null) continue;
+    let prev: number | undefined;
+    let next: number | undefined;
+    for (let j = i - 1; j >= 0 && prev == null; j--) prev = items[j].pos;
+    for (let j = i + 1; j < items.length && next == null; j++) next = items[j].pos;
+    items[i].pos = prev != null && next != null ? (prev + next) / 2 : prev != null ? prev + 1024 : next != null ? next - 1024 : 0;
+  }
+}
+
 /** Bring boards saved by older versions up to the current shape. */
 export function migrateBoard(b: Board): Board {
   if (!b.users) {
@@ -117,5 +131,6 @@ export function migrateBoard(b: Board): Board {
   // v2: attachments. Version-gated so deleting the column doesn't bring it back.
   if ((b.version ?? 1) < 2 && !b.columns.some((c) => c.type === 'files')) b.columns.push(newColumn('Attachments', 'files'));
   b.version = BOARD_VERSION;
+  ensurePositions(b);
   return b;
 }

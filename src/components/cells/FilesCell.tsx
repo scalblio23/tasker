@@ -1,7 +1,7 @@
 import { useRef, useState, type DragEvent } from 'react';
 import type { FileRef } from '../../types';
 import { uid } from '../../defaults';
-import { MAX_FILE_BYTES, deleteFile, formatBytes, openFile, putFile, useFileUrl } from '../../files';
+import { MAX_FILE_BYTES, formatBytes, openFile, removeStoredFile, saveFile, useFileUrl } from '../../files';
 import { Popover } from '../Popover';
 
 interface Props {
@@ -29,14 +29,10 @@ export function FilesCell({ value, onAdd, onRemove }: Props) {
     setBusy(true);
     try {
       const refs: FileRef[] = [];
-      for (const f of ok) {
-        const id = uid() + uid();
-        await putFile(id, f);
-        refs.push({ id, name: f.name, size: f.size, type: f.type, addedAt: Date.now() });
-      }
+      for (const f of ok) refs.push(await saveFile(f, uid() + uid()));
       onAdd(refs);
-    } catch {
-      alert('Could not save the file in this browser (storage may be full or blocked).');
+    } catch (e) {
+      alert(`Could not save the file: ${e instanceof Error ? e.message : 'storage unavailable'}`);
     } finally {
       setBusy(false);
     }
@@ -45,7 +41,7 @@ export function FilesCell({ value, onAdd, onRemove }: Props) {
   const remove = (f: FileRef) => {
     if (!confirm(`Remove "${f.name}"?`)) return;
     onRemove(f.id);
-    deleteFile(f.id).catch(() => {});
+    removeStoredFile(f);
   };
 
   const dropProps = {
@@ -104,13 +100,13 @@ export function FilesCell({ value, onAdd, onRemove }: Props) {
             {value.map((f) => (
               <div className="file-row" key={f.id}>
                 <FileThumb file={f} size={40} />
-                <button className="file-name" onClick={() => openFile(f.id)} title="Open">
+                <button className="file-name" onClick={() => openFile(f)} title="Open">
                   {f.name}
                   <span className="muted small block">
                     {formatBytes(f.size)} · {new Date(f.addedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                   </span>
                 </button>
-                <button className="icon-btn" onClick={() => openFile(f.id, f.name)} title="Download" aria-label="Download">
+                <button className="icon-btn" onClick={() => openFile(f, true)} title="Download" aria-label="Download">
                   ⤓
                 </button>
                 <button className="icon-btn" onClick={() => remove(f)} title="Remove" aria-label="Remove">
@@ -136,7 +132,7 @@ const EXT_COLORS: Record<string, string> = { pdf: '#e2445c', doc: '#2b579a', doc
 /** Image preview, or a colored square with the file extension. */
 function FileThumb({ file, size }: { file: FileRef; size: number }) {
   const isImage = file.type.startsWith('image/');
-  const url = useFileUrl(isImage ? file.id : null);
+  const url = useFileUrl(isImage ? file : null);
   const ext = (file.name.split('.').pop() ?? '').toLowerCase().slice(0, 4);
   const style = { width: size, height: size };
   if (isImage && url) return <img className="file-thumb" src={url} alt={file.name} style={style} />;

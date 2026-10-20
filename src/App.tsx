@@ -12,11 +12,12 @@ import { Popover } from './components/Popover';
 import { Reports } from './components/Reports';
 import { TimerChip } from './components/TimerChip';
 import { UserMenu } from './components/UserMenu';
+import { PasscodeScreen, SyncBadge } from './components/SyncBadge';
 
 type Panel = 'filter' | 'sort' | null;
 
 export default function App() {
-  const { board, update, reset } = useBoard();
+  const { board, update, reset, status, submitPasscode } = useBoard();
   const [search, setSearch] = useState('');
   const [panel, setPanel] = useState<Panel>(null);
   const [page, setPage] = useState<'table' | 'reports'>('table');
@@ -172,6 +173,8 @@ export default function App() {
     setPanel('filter');
   };
 
+  if (status === 'passcode') return <PasscodeScreen onSubmit={submitPasscode} />;
+
   function describe(q: ViewQuery) {
     const col = (id: string) => board.columns.find((c) => c.id === id)?.name ?? '';
     const parts = q.sort.map((s) => `${col(s.columnId)} ${s.dir === 'asc' ? 'A-Z' : 'Z-A'}`);
@@ -191,6 +194,7 @@ export default function App() {
               onBlur={(e) => e.target.value.trim() && update((b) => void (b.name = e.target.value.trim()))}
               onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
             />
+            <SyncBadge status={status} />
             <div className="spacer" />
             <TimerChip board={board} update={update} />
             <UserMenu board={board} update={update} />
@@ -300,9 +304,12 @@ export default function App() {
               >
                 + Add group
               </button>
-              <button className="btn ghost small" onClick={() => confirm('Reset the board to sample data?') && reset()}>
-                Reset
-              </button>
+              {/* Resetting a shared board would wipe it for everyone, so it's local-only. */}
+              {status === 'local' && (
+                <button className="btn ghost small" onClick={() => confirm('Reset the board to sample data?') && reset()}>
+                  Reset
+                </button>
+              )}
             </div>
 
             {panel === 'filter' && (
