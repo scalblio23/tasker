@@ -10,7 +10,8 @@ function devApi(): Plugin {
     name: 'tasker-dev-api',
     apply: 'serve',
     configureServer(server) {
-      process.env.TASKER_DEV_MEMORY = '1';
+      // Use an in-memory store unless real (or test) Redis settings are provided.
+      if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) process.env.TASKER_DEV_MEMORY = '1';
       server.middlewares.use(async (req, res, next) => {
         const match = req.url?.match(/^\/api\/([\w-]+)/);
         if (!match) return next();

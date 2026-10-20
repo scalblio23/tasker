@@ -24,11 +24,23 @@ function redisStore(url: string, token: string): Store {
   return {
     rev: async () => Number((await redis.get<string>(REV)) ?? 0),
     nextRev: () => redis.incr(REV),
-    getAll: async () => (await redis.hgetall<Record<string, string>>(HASH)) ?? {},
+    // With automaticDeserialization off, HGETALL / HMGET come back as raw Redis replies (flat arrays),
+    // not objects — handle both shapes.
+    getAll: async () => {
+      const raw = (await redis.hgetall(HASH)) as unknown;
+      if (!raw) return {};
+      if (!Array.isArray(raw)) return raw as Record<string, string>;
+      const out: Record<string, string> = {};
+      for (let i = 0; i + 1 < raw.length; i += 2) out[String(raw[i])] = String(raw[i + 1]);
+      return out;
+    },
     getMany: async (keys) => {
       if (!keys.length) return [];
-      const res = (await redis.hmget<Record<string, string | null>>(HASH, ...keys)) ?? {};
-      return keys.map((k) => res[k] ?? null);
+      const raw = (await redis.hmget(HASH, ...keys)) as unknown;
+      if (!raw) return keys.map(() => null);
+      if (Array.isArray(raw)) return keys.map((_, i) => (raw[i] == null ? null : String(raw[i])));
+      const obj = raw as Record<string, string | null>;
+      return keys.map((k) => obj[k] ?? null);
     },
     write: async (rev, entries) => {
       const keys = Object.keys(entries);

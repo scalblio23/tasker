@@ -58,7 +58,9 @@ async function read(request: Request) {
   if (rev <= known) return json({ configured: true, rev, changes: [] });
   const keys = await store.changedSince(since);
   const values = await store.getMany(keys);
-  return json({ configured: true, rev, changes: keys.map((key, i) => ({ key, data: parse(values[i]) })) });
+  // Only a stored "null" tombstone means deleted; a value we couldn't read is left out, never sent as a deletion.
+  const changes = keys.flatMap((key, i) => (values[i] == null ? [] : [{ key, data: parse(values[i]) }]));
+  return json({ configured: true, rev, changes });
 }
 
 /** POST { changes }: apply a batch of client changes under one new revision. */
