@@ -9,4 +9,9 @@ const readPasscode = () => {
 };
 
 /** Where data lives this session — set by the store once it has talked to the server. */
-export const syncConfig = { shared: false, files: false, passcode: readPasscode() };
+export const syncConfig = {
+  shared: false,
+  /** How attachments upload to shared storage ('token' / 'presigned'), or false to keep them local. */
+  files: false as false | 'token' | 'presigned',
+  passcode: readPasscode(),
+};

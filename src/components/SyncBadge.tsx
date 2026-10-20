@@ -8,12 +8,13 @@ const LABEL: Record<SyncStatus, { text: string; hint: string }> = {
   saving: { text: 'Saving…', hint: 'Sending your changes.' },
   offline: { text: 'Offline — retrying', hint: 'Can’t reach the server. Your edits are kept and will be sent when it’s back.' },
   passcode: { text: 'Passcode needed', hint: '' },
+  error: { text: 'Sync error', hint: 'The shared storage server returned an error, so changes are only saved in this browser.' },
 };
 
-export function SyncBadge({ status }: { status: SyncStatus }) {
+export function SyncBadge({ status, error }: { status: SyncStatus; error?: string }) {
   const { text, hint } = LABEL[status];
   return (
-    <span className={`sync-badge ${status}`} title={hint}>
+    <span className={`sync-badge ${status}`} title={status === 'error' && error ? `${hint}\n\n${error}` : hint}>
       <span className="sync-dot" />
       {text}
     </span>

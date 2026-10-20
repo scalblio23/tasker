@@ -39,8 +39,9 @@ others within a few seconds. The badge next to the board title shows the mode: *
 
 1. In your Vercel project open **Storage → Create Database**, pick **Upstash for Redis** (Marketplace),
    and connect it to this project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
-2. For shared attachments, also create a **Blob** store and connect it (adds `BLOB_READ_WRITE_TOKEN`).
-   Without it, attachments stay in the browser that uploaded them.
+2. For shared attachments, also create a **Blob** store and connect it. Both kinds of store work: older
+   ones add `BLOB_READ_WRITE_TOKEN`, newer ones add `BLOB_STORE_ID` + `BLOB_WEBHOOK_PUBLIC_KEY`.
+   Without a store, attachments stay in the browser that uploaded them.
 3. Optional: under **Settings → Environment Variables** add `TASKER_PASSCODE`. Everyone enters it once
    per browser. Without it, anyone with the URL can open the board.
 4. **Redeploy** (new environment variables only apply to new deployments).
@@ -54,6 +55,11 @@ edit is a field-level patch — so two people editing different things, even dif
 same task, don't overwrite each other. Clients poll every 3 s while in use and every 15 s when idle.
 *Tracking as*, unsaved sort/filter and expanded subtasks stay per person. Attachments upload
 straight from the browser to Vercel Blob via `api/upload.ts`; their URLs are public but unguessable.
+
+Troubleshooting: open `https://<your-app>/api/sync?full=1`. `{"configured":true,…}` means sharing is on;
+`{"configured":false}` means the Redis variables aren't reaching the deployment (redeploy); a page of
+HTML or a 404 means the deployment doesn't include the `api/` folder (wrong branch). If the badge shows
+**Sync error**, hover it to see the server's message.
 
 `npm run dev` serves the same API with an in-memory store, so you can try sharing between two
 local browser windows. See `.env.example` for all settings.

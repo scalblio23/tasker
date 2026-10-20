@@ -72,7 +72,13 @@ export function getStore(): Store | null {
   return url && token ? redisStore(url, token) : null;
 }
 
-export const filesConfigured = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+/**
+ * How attachments reach Vercel Blob: 'token' for stores with BLOB_READ_WRITE_TOKEN, 'presigned' for
+ * newer stores that authenticate with OIDC (BLOB_STORE_ID), or false when no store is connected.
+ */
+export type BlobMode = 'token' | 'presigned' | false;
+export const blobMode = (): BlobMode =>
+  process.env.BLOB_READ_WRITE_TOKEN ? 'token' : process.env.BLOB_STORE_ID ? 'presigned' : false;
 
 /** Optional shared team passcode (TASKER_PASSCODE). */
 export function authorized(passcode: string | null) {

@@ -1,4 +1,4 @@
-import { authorized, filesConfigured, getStore, json } from './_store.js';
+import { authorized, blobMode, getStore, json } from './_store.js';
 
 /** A whole-entity write (data, or null to delete) or a field-level patch of an item. */
 type Change =
@@ -21,6 +21,22 @@ const parse = (s: string | null) => {
  * `known` is the latest revision the client has seen: when nothing is newer the poll costs one read.
  */
 export async function GET(request: Request) {
+  try {
+    return await read(request);
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    return await write(request);
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+}
+
+async function read(request: Request) {
   const store = getStore();
   if (!store) return json({ configured: false });
   if (!authorized(request.headers.get('x-tasker-passcode'))) return json({ error: 'passcode' }, 401);
@@ -35,7 +51,7 @@ export async function GET(request: Request) {
         .map(([k, v]) => [k, parse(v)] as const)
         .filter(([, v]) => v != null),
     );
-    return json({ configured: true, files: filesConfigured(), rev, entities });
+    return json({ configured: true, files: blobMode(), rev, entities });
   }
   const knownParam = params.get('known');
   const known = knownParam == null ? since : Number(knownParam) || 0;
@@ -46,7 +62,7 @@ export async function GET(request: Request) {
 }
 
 /** POST { changes }: apply a batch of client changes under one new revision. */
-export async function POST(request: Request) {
+async function write(request: Request) {
   const store = getStore();
   if (!store) return json({ configured: false }, 404);
   if (!authorized(request.headers.get('x-tasker-passcode'))) return json({ error: 'passcode' }, 401);

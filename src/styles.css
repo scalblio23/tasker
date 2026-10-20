@@ -449,3 +449,5 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 }
 .passcode-card h2 { margin: 0; }
 .passcode-card p { margin: 0; }
+.sync-badge.error { background: #fff0f2; color: #d83a52; cursor: help; }
+.sync-badge.error .sync-dot { background: #e2445c; }

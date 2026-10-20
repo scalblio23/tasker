@@ -1,20 +1,37 @@
-import { del } from '@vercel/blob';
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
-import { authorized, json } from './_store.js';
+import { del, issueSignedToken } from '@vercel/blob';
+import { handleUpload, handleUploadPresigned, type HandleUploadBody, type HandleUploadPresignedBody } from '@vercel/blob/client';
+import { authorized, blobMode, json } from './_store.js';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
-/** Issues short-lived tokens so the browser can upload attachments straight to Vercel Blob. */
+/** Lets the browser upload attachments straight to Vercel Blob (classic token or presigned flow). */
 export async function POST(request: Request) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return json({ error: 'Attachments storage is not configured' }, 404);
-  const body = (await request.json()) as HandleUploadBody;
+  const mode = blobMode();
+  if (!mode) return json({ error: 'Attachments storage is not configured' }, 404);
   try {
-    const result = await handleUpload({
-      body,
+    if (mode === 'token') {
+      const result = await handleUpload({
+        body: (await request.json()) as HandleUploadBody,
+        request,
+        onBeforeGenerateToken: async (_pathname, clientPayload) => {
+          if (!authorized(clientPayload)) throw new Error('Wrong passcode');
+          return { maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true };
+        },
+      });
+      return json(result);
+    }
+    const result = await handleUploadPresigned({
+      body: (await request.json()) as HandleUploadPresignedBody,
       request,
-      onBeforeGenerateToken: async (_pathname, clientPayload) => {
+      getSignedToken: async (_pathname, clientPayload) => {
         if (!authorized(clientPayload)) throw new Error('Wrong passcode');
-        return { maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true };
+        const token = await issueSignedToken({
+          pathname: '*', // the final name gets a random suffix, so scope to the store
+          operations: ['put'],
+          maximumSizeInBytes: MAX_BYTES,
+          validUntil: Date.now() + 10 * 60 * 1000,
+        });
+        return { token, urlOptions: { maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true } };
       },
     });
     return json(result);
@@ -25,10 +42,14 @@ export async function POST(request: Request) {
 
 /** DELETE ?url=<blob url>: remove an attachment from storage. */
 export async function DELETE(request: Request) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return json({ error: 'not configured' }, 404);
+  if (!blobMode()) return json({ error: 'not configured' }, 404);
   if (!authorized(request.headers.get('x-tasker-passcode'))) return json({ error: 'passcode' }, 401);
   const url = new URL(request.url).searchParams.get('url');
   if (!url || !/^https:\/\/[\w.-]+\.blob\.vercel-storage\.com\//.test(url)) return json({ error: 'bad url' }, 400);
-  await del(url);
-  return json({ ok: true });
+  try {
+    await del(url);
+    return json({ ok: true });
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : 'Delete failed' }, 500);
+  }
 }

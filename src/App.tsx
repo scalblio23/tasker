@@ -17,7 +17,7 @@ import { PasscodeScreen, SyncBadge } from './components/SyncBadge';
 type Panel = 'filter' | 'sort' | null;
 
 export default function App() {
-  const { board, update, reset, status, submitPasscode } = useBoard();
+  const { board, update, reset, status, error, submitPasscode } = useBoard();
   const [search, setSearch] = useState('');
   const [panel, setPanel] = useState<Panel>(null);
   const [page, setPage] = useState<'table' | 'reports'>('table');
@@ -194,7 +194,7 @@ export default function App() {
               onBlur={(e) => e.target.value.trim() && update((b) => void (b.name = e.target.value.trim()))}
               onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
             />
-            <SyncBadge status={status} />
+            <SyncBadge status={status} error={error} />
             <div className="spacer" />
             <TimerChip board={board} update={update} />
             <UserMenu board={board} update={update} />

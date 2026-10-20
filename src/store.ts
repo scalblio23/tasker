@@ -30,8 +30,9 @@ function load(): Board {
  * synced / saving — shared board, changes up to date / being sent
  * offline    — shared board but the server can't be reached; edits are kept and retried
  * passcode   — the server wants the team passcode
+ * error      — the server is there but failing (e.g. storage misconfigured); see `error`
  */
-export type SyncStatus = 'local' | 'connecting' | 'synced' | 'saving' | 'offline' | 'passcode';
+export type SyncStatus = 'local' | 'connecting' | 'synced' | 'saving' | 'offline' | 'passcode' | 'error';
 
 export type Mutator = (fn: (draft: Board) => void) => void;
 
@@ -43,6 +44,7 @@ export type Mutator = (fn: (draft: Board) => void) => void;
 export function useBoard() {
   const [board, setBoard] = useState<Board>(load);
   const [status, setStatus] = useState<SyncStatus>('connecting');
+  const [error, setError] = useState('');
   const boardRef = useRef(board);
   const s = useRef({
     shared: false,
@@ -162,14 +164,24 @@ export function useBoard() {
   const connectOnce = async () => {
     const st = s.current;
     setStatus('connecting');
-    let data: { configured?: boolean; files?: boolean; rev: number; entities: Record<string, unknown> };
+    let data: { configured?: boolean; files?: false | 'token' | 'presigned'; rev: number; entities: Record<string, unknown>; error?: string };
+    let res: Response;
     try {
-      const res = await fetch('/api/sync?full=1', { headers: headers() });
-      if (res.status === 401) return setStatus('passcode');
-      if (!res.ok || !res.headers.get('content-type')?.includes('json')) throw new Error('no api');
+      res = await fetch('/api/sync?full=1', { headers: headers() });
+    } catch {
+      return setStatus('local'); // no server at all
+    }
+    if (res.status === 401) return setStatus('passcode');
+    if (!res.headers.get('content-type')?.includes('json')) return setStatus('local'); // no /api deployed (e.g. vite preview)
+    try {
       data = await res.json();
     } catch {
-      return setStatus('local'); // e.g. plain `vite preview`, or no /api deployed
+      return setStatus('local');
+    }
+    if (!res.ok || data.error) {
+      // The API exists but is failing — say so rather than silently going local.
+      setError(data.error ?? `Server error ${res.status}`);
+      return setStatus('error');
     }
     if (!data.configured) return setStatus('local');
 
@@ -184,7 +196,7 @@ export function useBoard() {
     }
 
     st.shared = syncConfig.shared = true;
-    syncConfig.files = !!data.files;
+    syncConfig.files = data.files ?? false;
     st.rev = data.rev;
 
     if (!seeding) {
@@ -254,5 +266,5 @@ export function useBoard() {
     [connect],
   );
 
-  return { board, update, reset, status, submitPasscode };
+  return { board, update, reset, status, error, submitPasscode };
 }

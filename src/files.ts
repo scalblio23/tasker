@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { upload } from '@vercel/blob/client';
+import { upload, uploadPresigned } from '@vercel/blob/client';
 import type { Board, FileRef } from './types';
 import { syncConfig } from './syncConfig';
 
@@ -87,16 +87,15 @@ export async function openFile(ref: FileRef, download = false) {
 }
 
 /** Store a new attachment — in shared storage when available, otherwise locally. */
+/** Upload to Vercel Blob using whichever flow the connected store supports. */
+function uploadShared(name: string, body: Blob) {
+  const fn = syncConfig.files === 'presigned' ? uploadPresigned : upload;
+  return fn(`attachments/${name}`, body, { access: 'public', handleUploadUrl: '/api/upload', clientPayload: syncConfig.passcode });
+}
+
 export async function saveFile(file: File, id: string): Promise<FileRef> {
   const ref: FileRef = { id, name: file.name, size: file.size, type: file.type, addedAt: Date.now() };
-  if (syncConfig.files) {
-    const blob = await upload(`attachments/${file.name}`, file, {
-      access: 'public',
-      handleUploadUrl: '/api/upload',
-      clientPayload: syncConfig.passcode,
-    });
-    return { ...ref, url: blob.url };
-  }
+  if (syncConfig.files) return { ...ref, url: (await uploadShared(file.name, file)).url };
   await putFile(id, file);
   return ref;
 }
@@ -127,12 +126,7 @@ export async function uploadLocalFiles(board: Board): Promise<Board> {
         try {
           const blob = await getFile(ref.id);
           if (!blob) continue;
-          const up = await upload(`attachments/${ref.name}`, blob, {
-            access: 'public',
-            handleUploadUrl: '/api/upload',
-            clientPayload: syncConfig.passcode,
-          });
-          ref.url = up.url;
+          ref.url = (await uploadShared(ref.name, blob)).url;
         } catch {
           /* leave it local */
         }
