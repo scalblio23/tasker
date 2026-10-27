@@ -7,11 +7,11 @@ import type { Board, Item, TimeEntry } from './types';
  *   time:<id>                            — one time entry
  * Per-device state (tracking-as user, unsaved sort/filter, active view, expanded subtasks) never syncs.
  */
-export type ItemPatch = { fields?: Partial<Record<'groupId' | 'parentId' | 'pos', unknown>>; values?: Record<string, unknown> };
+export type ItemPatch = { fields?: Partial<Record<'groupId' | 'parentId' | 'pos' | 'archived', unknown>>; values?: Record<string, unknown> };
 export type Change = { key: string; data: unknown } | { key: string; patch: ItemPatch };
 
 const ARRAYS = ['columns', 'groups', 'views', 'users'] as const;
-const ITEM_FIELDS = ['groupId', 'parentId', 'pos'] as const;
+const ITEM_FIELDS = ['groupId', 'parentId', 'pos', 'archived'] as const;
 const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
 
 /** Shared part of an item (drops per-device `open`). */

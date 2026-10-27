@@ -64,6 +64,8 @@ export interface Item {
   open?: boolean;
   /** Sort key for row order, so order survives syncing items individually. */
   pos?: number;
+  /** When the task was archived (epoch ms). Archived tasks, and subtasks of archived tasks, leave the board. */
+  archived?: number | null;
   values: Record<string, CellValue | undefined>;
 }
 

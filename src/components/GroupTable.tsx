@@ -29,19 +29,24 @@ interface Props {
   setCell: (itemId: string, colId: string, v: CellValue | undefined) => void;
   onSortColumn: (columnId: string, dir: SortDir) => void;
   onFilterColumn: (columnId: string) => void;
+  /** Rows ticked with the left-hand checkboxes (per device). */
+  selectedRows: Set<string>;
+  onToggleRows: (ids: string[], on: boolean) => void;
 }
 
 export function GroupTable(props: Props) {
-  const { board, group, items, subtasks, isOpen, totalInGroup, update, onSortColumn, onFilterColumn } = props;
+  const { board, group, items, subtasks, isOpen, totalInGroup, update, onSortColumn, onFilterColumn, selectedRows, onToggleRows } = props;
   const { columns } = board;
   const [newName, setNewName] = useState('');
   // Subtask counts include ones hidden by a filter, so the toggle always tells the truth.
   const subCount = useMemo(() => {
     const m = new Map<string, number>();
-    board.items.forEach((i) => i.parentId && m.set(i.parentId, (m.get(i.parentId) ?? 0) + 1));
+    board.items.forEach((i) => i.parentId && !i.archived && m.set(i.parentId, (m.get(i.parentId) ?? 0) + 1));
     return m;
   }, [board.items]);
-  const template = `6px ${columns.map((c) => `${c.width}px`).join(' ')} 48px`;
+  const template = `6px 36px ${columns.map((c) => `${c.width}px`).join(' ')} 48px`;
+  const visibleIds = items.map((i) => i.id);
+  const picked = visibleIds.filter((id) => selectedRows.has(id)).length;
   const style = { gridTemplateColumns: template, '--group-color': group.color } as React.CSSProperties;
 
   const setGroup = (patch: Partial<Group>) =>
@@ -105,6 +110,15 @@ export function GroupTable(props: Props) {
         <div className="table">
           <div className="row head" style={style}>
             <div className="edge first" />
+            <div className="check-cell head">
+              <Checkbox
+                checked={picked > 0 && picked === visibleIds.length}
+                indeterminate={picked > 0 && picked < visibleIds.length}
+                disabled={!visibleIds.length}
+                onChange={(on) => onToggleRows(visibleIds, on)}
+                label={`Select all in ${group.name}`}
+              />
+            </div>
             {columns.map((c, idx) => (
               <ColumnHeader
                 key={c.id}
@@ -148,6 +162,7 @@ export function GroupTable(props: Props) {
 
           <div className="row add-row" style={style}>
             <div className="edge faded" />
+            <div className="check-cell" />
             <div className="cell name-col">
               <input
                 className="cell-input"
@@ -161,6 +176,7 @@ export function GroupTable(props: Props) {
           </div>
 
           <div className="row summary" style={style}>
+            <div />
             <div />
             {columns.map((c) => (
               <div className="summary-cell" key={c.id}>
@@ -182,12 +198,16 @@ interface RowProps extends Props {
   open: boolean;
 }
 
-function ItemRow({ board, item, style, subCount, open, update, setCell }: RowProps) {
+function ItemRow({ board, item, style, subCount, open, update, setCell, selectedRows, onToggleRows }: RowProps) {
   const selection = useSelection();
   const isSub = !!item.parentId;
+  const picked = selectedRows.has(item.id);
   return (
-    <div className={`row ${isSub ? 'sub' : ''}`} style={style}>
+    <div className={`row ${isSub ? 'sub' : ''} ${picked ? 'picked' : ''}`} style={style}>
       <div className="edge" />
+      <div className="check-cell">
+        <Checkbox checked={picked} onChange={(on) => onToggleRows([item.id], on)} label="Select row" />
+      </div>
       {board.columns.map((c) => (
         <div
           className={`cell ${c.locked ? 'name-col' : ''} type-${c.type} ${selection.isSelected(item.id, c.id) ? 'selected' : ''}`}
@@ -243,6 +263,7 @@ function AddSubtask({ style, groupId, parentId, update }: { style: React.CSSProp
   return (
     <div className="row add-row sub" style={style}>
       <div className="edge faded" />
+      <div className="check-cell" />
       <div className="cell name-col">
         <span className="sub-elbow" aria-hidden="true" />
         <input
@@ -339,4 +360,32 @@ function GroupTime({ board, items }: { board: Board; items: Item[] }) {
   board.items.forEach((i) => i.parentId && ids.has(i.parentId) && ids.add(i.id));
   const ms = totalMs(board.timeEntries, Date.now(), (e) => ids.has(e.itemId));
   return ms ? <div className="group-time">{formatDuration(ms)}</div> : null;
+}
+
+export function Checkbox({
+  checked,
+  indeterminate = false,
+  disabled = false,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
+  label: string;
+}) {
+  return (
+    <input
+      type="checkbox"
+      className="row-check"
+      checked={checked}
+      disabled={disabled}
+      aria-label={label}
+      ref={(el) => {
+        if (el) el.indeterminate = indeterminate;
+      }}
+      onChange={(e) => onChange(e.target.checked)}
+    />
+  );
 }

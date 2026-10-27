@@ -10,6 +10,9 @@ import { ViewTabs } from './components/ViewTabs';
 import { FilterPanel, SortPanel, addFilter } from './components/QueryPanels';
 import { Popover } from './components/Popover';
 import { Reports } from './components/Reports';
+import { ArchivePage } from './components/ArchivePage';
+import { RowBar } from './components/RowBar';
+import { activeItems, archiveItems, archivedEntries, deleteItems } from './archive';
 import { TimerChip } from './components/TimerChip';
 import { UserMenu } from './components/UserMenu';
 import { PasscodeScreen, SyncBadge } from './components/SyncBadge';
@@ -21,7 +24,8 @@ export default function App() {
   const { board, update, reset, status, error, submitPasscode } = useBoard();
   const [search, setSearch] = useState('');
   const [panel, setPanel] = useState<Panel>(null);
-  const [page, setPage] = useState<'table' | 'reports'>('table');
+  const [page, setPage] = useState<'table' | 'reports' | 'archive'>('table');
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set());
   const filterBtn = useRef<HTMLButtonElement>(null);
   const sortBtn = useRef<HTMLButtonElement>(null);
 
@@ -29,7 +33,7 @@ export default function App() {
   const dirty = !sameQuery(board.draft, activeView);
   const ctx = useMemo(() => makeCtx(board.users, board.timeEntries), [board.users, board.timeEntries]);
   const visible = useMemo(
-    () => applyQuery(board.items, board.columns, board.draft, search, ctx),
+    () => applyQuery(activeItems(board.items), board.columns, board.draft, search, ctx),
     [board.items, board.columns, board.draft, search, ctx],
   );
   const activeFilters = board.draft.filters.filter((r) => isActiveRule(r, board.columns)).length;
@@ -52,6 +56,23 @@ export default function App() {
     [board.groups, groupRows, visible, isOpen],
   );
   const colIds = useMemo(() => board.columns.map((c) => c.id), [board.columns]);
+
+  // Ticked rows, limited to tasks still on the board (others may archive or delete them).
+  const liveSelected = useMemo(() => new Set(rowIds.filter((id) => selectedRows.has(id))), [rowIds, selectedRows]);
+  const archivedCount = useMemo(() => archivedEntries(board).length, [board]);
+  const toggleRows = (ids: string[], on: boolean) => {
+    selection.clear(); // row ticks and highlighted cells are separate selections
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => (on ? next.add(id) : next.delete(id)));
+      return next;
+    });
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('.popover') && setSelectedRows(new Set());
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   const selection = useCellSelection(rowIds, colIds);
   const { cells, bounds } = selection;
 
@@ -229,6 +250,11 @@ export default function App() {
                 })
               }
             />
+            <div className={`tab ${page === 'archive' ? 'active' : ''}`}>
+              <button className="tab-btn" onClick={() => setPage('archive')}>
+                🗄 Archive{archivedCount ? <span className="tab-count">{archivedCount}</span> : null}
+              </button>
+            </div>
             <div className={`tab ${page === 'reports' ? 'active' : ''}`}>
               <button className="tab-btn" onClick={() => setPage('reports')}>
                 <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
@@ -244,6 +270,8 @@ export default function App() {
 
         {page === 'reports' ? (
           <Reports board={board} update={update} />
+        ) : page === 'archive' ? (
+          <ArchivePage board={board} update={update} />
         ) : (
           <>
             <div className="toolbar">
@@ -328,7 +356,7 @@ export default function App() {
             <main className="board">
               {board.groups.map((g) => {
                 const items = groupRows.get(g.id)!;
-                const total = board.items.filter((i) => i.groupId === g.id && !i.parentId).length;
+                const total = board.items.filter((i) => i.groupId === g.id && !i.parentId && !i.archived).length;
                 if (narrowing && !items.length) return null;
                 return (
                   <GroupTable
@@ -343,6 +371,8 @@ export default function App() {
                     setCell={setCell}
                     onSortColumn={sortColumn}
                     onFilterColumn={filterColumn}
+                    selectedRows={liveSelected}
+                    onToggleRows={toggleRows}
                   />
                 );
               })}
@@ -351,7 +381,31 @@ export default function App() {
           </>
         )}
 
-        {page === 'table' && cells.length > 1 && (
+        {page === 'table' && liveSelected.size > 0 && (
+          <RowBar
+            count={liveSelected.size}
+            groups={board.groups}
+            onArchive={() => {
+              update((b) => archiveItems(b, liveSelected));
+              setSelectedRows(new Set());
+            }}
+            onMove={(groupId) =>
+              update((b) => {
+                // Subtasks follow their task.
+                for (const i of b.items) if (liveSelected.has(i.id) || (i.parentId && liveSelected.has(i.parentId))) i.groupId = groupId;
+              })
+            }
+            onDelete={() => {
+              const n = liveSelected.size;
+              if (!confirm(`Delete ${n} task${n === 1 ? '' : 's'} (and their subtasks) for good? Archive them instead to keep a copy.`)) return;
+              update((b) => deleteItems(b, liveSelected));
+              setSelectedRows(new Set());
+            }}
+            onClear={() => setSelectedRows(new Set())}
+          />
+        )}
+
+        {page === 'table' && cells.length > 1 && liveSelected.size === 0 && (
           <BulkBar
             columns={board.columns}
             users={board.users}
