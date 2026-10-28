@@ -1,4 +1,4 @@
-export type ColumnType = 'text' | 'select' | 'status' | 'url' | 'people' | 'time' | 'files';
+export type ColumnType = 'text' | 'select' | 'status' | 'url' | 'people' | 'time' | 'files' | 'date';
 
 export interface SelectOption {
   id: string;
@@ -34,7 +34,8 @@ export interface FileRef {
 }
 
 /**
- * text → string, select/status → option id, url → UrlValue, people → user ids, files → FileRef[].
+ * text → string, select/status → option id, url → UrlValue, people → user ids, files → FileRef[],
+ * date → "YYYY-MM-DD".
  * Time columns read `timeEntries`.
  */
 export type CellValue = string | UrlValue | string[] | FileRef[];
@@ -84,7 +85,7 @@ export interface SortRule {
   dir: SortDir;
 }
 
-export type FilterOp = 'is' | 'is_not' | 'contains' | 'not_contains' | 'is_empty' | 'is_not_empty';
+export type FilterOp = 'is' | 'is_not' | 'contains' | 'not_contains' | 'is_empty' | 'is_not_empty' | 'before' | 'after';
 
 export interface FilterRule {
   id: string;

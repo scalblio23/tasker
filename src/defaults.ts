@@ -23,7 +23,7 @@ export const USER_COLORS = ['#e2445c', '#00a9ff', '#00c875', '#a25ddc', '#fdab3d
 export const defaultUsers = (): User[] =>
   ['Charles', 'Jem', 'Cody', 'Byrone'].map((name, i) => ({ id: uid(), name, color: USER_COLORS[i % USER_COLORS.length] }));
 
-const WIDTHS: Record<Column['type'], number> = { text: 180, select: 150, status: 150, url: 200, people: 140, time: 170, files: 160 };
+const WIDTHS: Record<Column['type'], number> = { text: 180, select: 150, status: 150, url: 200, people: 140, time: 170, files: 160, date: 130 };
 
 export const MIN_WIDTH = 70;
 export const MAX_WIDTH = 800;
@@ -58,6 +58,7 @@ export function sampleBoard(): Board {
   const person: Column = { ...newColumn('Person', 'people'), id: 'person' };
   const time: Column = { ...newColumn('Time tracking', 'time'), id: 'time' };
   const files: Column = { ...newColumn('Attachments', 'files'), id: 'files' };
+  const due: Column = { ...newColumn('Due date', 'date'), id: 'due' };
   const users = defaultUsers();
   const [charles, jem, cody, byrone] = users.map((u) => [u.id]);
 
@@ -89,7 +90,7 @@ export function sampleBoard(): Board {
   return {
     version: BOARD_VERSION,
     name: 'My Tasks',
-    columns: [name, person, client, dept, priority, status, time, link, files],
+    columns: [name, person, client, dept, priority, status, due, time, link, files],
     groups: [g1, g2],
     items,
     views: [{ id: 'main', name: 'Main table', sort: [], conjunction: 'and', filters: [] }],

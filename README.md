@@ -10,7 +10,7 @@ npm run build    # typecheck + production build into dist/
 
 ## Features
 
-- **Column types** — Text, Dropdown (select), Status, Link (URL), Person, Time tracking and Attachments. Add one with the `+` at the end of the header row.
+- **Column types** — Text, Dropdown (select), Status, Link (URL), Person, Time tracking, Attachments and Date. Add one with the `+` at the end of the header row.
 - **Square, full-fill select/status cells** — the label's color fills the whole cell edge to edge (no pills). Click a cell to pick a label; *Edit labels* lets you rename, recolor, add or delete labels.
 - **Link cells** — store a web address plus optional display text; opens in a new tab.
 - **Sort** — multi-level A → Z / Z → A by any column (from the Sort button or a column's `⋯` menu). Empty cells always sort last.
@@ -20,6 +20,7 @@ npm run build    # typecheck + production build into dist/
 - **Person column** — click a cell to assign one or more users. Filter with *Person is Jem*, sort, bulk-assign or paste names.
 - **Time tracking** — every entry belongs to a user. The first ▶ on a device asks *who's tracking?* and remembers it; after that ▶ starts a timer for that user (starting another stops the first); ■ stops it. The running timer also shows top right with a Stop button. Avatars show who is tracking each running timer. Click the total to see the time log with a per-person breakdown, reassign an entry to someone else, add time manually for a chosen person ("1h 30m", "1:30", "1.5") or delete entries.
 - **Reports tab** — time tracked today / this week / this month / all time, for everyone or one person: totals, by person, by task, the full log, and CSV export.
+- **Date column** — click a cell for a calendar (weeks start Monday) with *Today* and *Clear*. Filter with *is / is not / is before / is after / is empty*, sort chronologically, bulk-set from the bar, or paste dates such as `2026-10-28`, `28/10/2026` (day first) or `28 Oct 2026`.
 - **Select rows** — tick the checkbox on the left of a row (or the header checkbox for a whole group) to get a bar with *Archive*, *Move to* group and *Delete*. Esc clears.
 - **Archive** — archived tasks (with their subtasks) leave the board and appear in the *Archive* tab, where they can be searched, restored or deleted for good. Archiving syncs to everyone; tracked time stays in reports.
 - **Subtasks** — hover a task and click *+ Sub* (or the `▸ 2` count) to expand it and add subtasks. Subtasks use the same columns, so each can have its own person, status, timer and so on. Filters show a task when it or any subtask matches; sorting orders subtasks within their task; deleting a task deletes its subtasks. Reports list subtask time as "Task › Subtask".

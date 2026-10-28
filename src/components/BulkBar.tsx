@@ -3,6 +3,7 @@ import type { CellValue, Column, User } from '../types';
 import type { CellRef } from '../selection';
 import { choicesFor, isEditable, valueFromText } from '../logic';
 import { Popover } from './Popover';
+import { Calendar } from './cells/DateCell';
 
 interface Props {
   columns: Column[];
@@ -56,7 +57,7 @@ function BulkSetter({
   onSet: (v: CellValue | undefined) => void;
 }) {
   const choices = choicesFor(column, users);
-  const pick = column.type !== 'text' && column.type !== 'url';
+  const pick = column.type !== 'text' && column.type !== 'url' && column.type !== 'date';
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -75,7 +76,15 @@ function BulkSetter({
           <div className="menu-label">
             Set {count} {column.name} cell{count === 1 ? '' : 's'} to
           </div>
-          {pick ? (
+          {column.type === 'date' ? (
+            <Calendar
+              value=""
+              onPick={(iso) => {
+                onSet(iso);
+                close();
+              }}
+            />
+          ) : pick ? (
             <div className="option-grid">
               {choices.map((o) => (
                 <button

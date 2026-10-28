@@ -467,3 +467,25 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .check-th { width: 36px; text-align: center; }
 .nowrap { white-space: nowrap; }
 .btn.danger { color: var(--danger); }
+
+/* ---------- date ---------- */
+.date-cell {
+  width: 100%; border: 1px solid transparent; background: none; padding: 0 8px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.date-cell:hover { border-color: var(--border); }
+.date-cell.today { color: var(--primary); font-weight: 600; }
+.date-cell .placeholder { color: transparent; font-size: 13px; }
+.date-cell:hover .placeholder { color: var(--muted); }
+.date-pop { width: 260px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.cal-head .icon-btn { font-size: 18px; padding: 0 10px; }
+.cal-title { font-weight: 600; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-wd { text-align: center; font-size: 11px; color: var(--muted); padding: 4px 0; }
+.cal-day { border: none; background: none; height: 30px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cal-day:hover { background: var(--hover); }
+.cal-day.other { color: #b0b3c0; }
+.cal-day.today { box-shadow: inset 0 0 0 1.5px var(--primary); color: var(--primary); font-weight: 600; }
+.cal-day.selected { background: var(--primary); color: #fff; box-shadow: none; }
+.bulk-pop .calendar { width: 240px; }

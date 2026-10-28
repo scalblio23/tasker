@@ -12,6 +12,7 @@ import { UrlCell } from './cells/UrlCell';
 import { PeopleCell } from './cells/PeopleCell';
 import { TimeCell } from './cells/TimeCell';
 import { FilesCell } from './cells/FilesCell';
+import { DateCell } from './cells/DateCell';
 import { addManualEntry, startTimer, stopTimers } from '../timers';
 import { formatDuration, totalMs } from '../time';
 
@@ -294,6 +295,8 @@ function renderCell(c: Column, item: Item, board: Board, update: Mutator, onChan
       );
     case 'url':
       return <UrlCell value={v as UrlValue | undefined} onChange={onChange} />;
+    case 'date':
+      return <DateCell value={typeof v === 'string' ? v : ''} onChange={onChange} />;
     case 'people':
       return <PeopleCell users={board.users} value={peopleIds(v)} onChange={onChange} />;
     case 'files':

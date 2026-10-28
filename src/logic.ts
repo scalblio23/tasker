@@ -1,6 +1,7 @@
 import type { Board, CellValue, Column, FileRef, FilterOp, FilterRule, Item, SortRule, TimeEntry, UrlValue, User, ViewQuery } from './types';
 import { PALETTE, uid } from './defaults';
 import { formatDuration, totalMs } from './time';
+import { formatDate, parseDate } from './dates';
 
 export const isOptionColumn = (col: Column) => col.type === 'select' || col.type === 'status';
 
@@ -39,6 +40,7 @@ export function cellText(col: Column, item: Item, ctx: CellCtx): string {
   if (col.type === 'people')
     return peopleIds(v).map((id) => ctx.users.find((u) => u.id === id)?.name).filter(Boolean).join(', ');
   if (col.type === 'files') return fileRefs(v).map((f) => f.name).join(', ');
+  if (col.type === 'date') return typeof v === 'string' ? formatDate(v) : '';
   if (isOptionColumn(col)) return col.options.find((o) => o.id === v)?.label ?? '';
   if (col.type === 'url') {
     const u = v as UrlValue;
@@ -54,7 +56,15 @@ export const OPS: { op: FilterOp; label: string }[] = [
   { op: 'not_contains', label: 'does not contain' },
   { op: 'is_empty', label: 'is empty' },
   { op: 'is_not_empty', label: 'is not empty' },
+  { op: 'before', label: 'is before' },
+  { op: 'after', label: 'is after' },
 ];
+
+/** Operators offered for a column: dates compare by day, everything else by text. */
+export const opsFor = (col: Column | undefined) =>
+  col?.type === 'date'
+    ? OPS.filter((o) => !['contains', 'not_contains'].includes(o.op))
+    : OPS.filter((o) => o.op !== 'before' && o.op !== 'after');
 
 export const opNeedsValue = (op: FilterOp) => op !== 'is_empty' && op !== 'is_not_empty';
 
@@ -71,6 +81,15 @@ export function isActiveRule(rule: FilterRule, columns: Column[]) {
 function matchRule(rule: FilterRule, col: Column, item: Item, ctx: CellCtx): boolean {
   const text = cellText(col, item, ctx).toLowerCase();
   const val = rule.value.trim().toLowerCase();
+  if (col.type === 'date' && opNeedsValue(rule.op)) {
+    const d = typeof item.values[col.id] === 'string' ? (item.values[col.id] as string) : '';
+    const target = rule.value.trim();
+    if (rule.op === 'is') return d === target;
+    if (rule.op === 'is_not') return d !== target;
+    if (!d) return false; // an empty date is neither before nor after anything
+    if (rule.op === 'before') return d < target;
+    if (rule.op === 'after') return d > target;
+  }
   if (opUsesOption(col, rule.op)) {
     const v = item.values[col.id];
     const hit = col.type === 'people' ? peopleIds(v).includes(rule.value) : v === rule.value;
@@ -83,6 +102,7 @@ function matchRule(rule: FilterRule, col: Column, item: Item, ctx: CellCtx): boo
     case 'not_contains': return !text.includes(val);
     case 'is_empty': return text === '';
     case 'is_not_empty': return text !== '';
+    default: return true;
   }
 }
 
@@ -146,8 +166,9 @@ function compareItems(a: Item, b: Item, sorts: SortRule[], byId: Map<string, Col
       if (!ma || !mb) return ma ? -1 : 1;
       return s.dir === 'asc' ? ma - mb : mb - ma;
     }
-    const ta = cellText(col, a, ctx);
-    const tb = cellText(col, b, ctx);
+    // Dates sort chronologically (ISO strings compare correctly), not by their display text.
+    const ta = col.type === 'date' ? String(a.values[col.id] ?? '') : cellText(col, a, ctx);
+    const tb = col.type === 'date' ? String(b.values[col.id] ?? '') : cellText(col, b, ctx);
     // Empty cells always sink to the bottom, whichever direction.
     if (!ta && !tb) continue;
     if (!ta) return 1;
@@ -172,6 +193,7 @@ export function normalizeUrl(url: string) {
 export function cellCopyText(col: Column, item: Item, ctx: CellCtx): string {
   const v = item.values[col.id];
   if (col.type === 'url' && v && typeof v === 'object' && !Array.isArray(v)) return v.url;
+  if (col.type === 'date') return typeof v === 'string' ? v : '';
   return cellText(col, item, ctx);
 }
 
@@ -204,6 +226,7 @@ export function valueFromText(col: Column, text: string, users: User[]): CellVal
     return o.id;
   }
   if (col.type === 'url') return { url: normalizeUrl(t), text: '' };
+  if (col.type === 'date') return parseDate(t) ?? undefined;
   return t;
 }
 

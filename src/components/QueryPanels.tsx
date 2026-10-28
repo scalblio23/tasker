@@ -1,5 +1,5 @@
 import type { Column, FilterOp, FilterRule, SortRule, User, ViewQuery } from '../types';
-import { OPS, choicesFor, opNeedsValue, opUsesOption } from '../logic';
+import { choicesFor, opNeedsValue, opUsesOption, opsFor } from '../logic';
 import { uid } from '../defaults';
 
 interface PanelProps {
@@ -38,7 +38,12 @@ export function FilterPanel({ columns, users, query, onChange }: PanelProps) {
             <select
               className="input"
               value={rule.columnId}
-              onChange={(e) => setRule(rule.id, { columnId: e.target.value, value: '' })}
+              onChange={(e) => {
+                const next = columns.find((c) => c.id === e.target.value);
+                // Keep the operator if the new column supports it (e.g. "contains" isn't offered for dates).
+                const op = opsFor(next).some((o) => o.op === rule.op) ? rule.op : opUsesOption(next!, 'is') || next?.type === 'date' ? 'is' : 'contains';
+                setRule(rule.id, { columnId: e.target.value, op, value: '' });
+              }}
             >
               {columns.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -56,7 +61,7 @@ export function FilterPanel({ columns, users, query, onChange }: PanelProps) {
                 setRule(rule.id, { op, value: keep ? rule.value : '' });
               }}
             >
-              {OPS.map((o) => (
+              {opsFor(col).map((o) => (
                 <option key={o.op} value={o.op}>
                   {o.label}
                 </option>
@@ -75,6 +80,7 @@ export function FilterPanel({ columns, users, query, onChange }: PanelProps) {
               ) : (
                 <input
                   className="input"
+                  type={col.type === 'date' ? 'date' : 'text'}
                   placeholder="Value"
                   value={rule.value}
                   onChange={(e) => setRule(rule.id, { value: e.target.value })}
@@ -109,7 +115,7 @@ export function FilterPanel({ columns, users, query, onChange }: PanelProps) {
 
 export function addFilter(query: ViewQuery, columns: Column[], columnId?: string): ViewQuery {
   const col = columns.find((c) => c.id === columnId) ?? columns.find((c) => !c.locked) ?? columns[0];
-  const op: FilterOp = opUsesOption(col, 'is') ? 'is' : 'contains';
+  const op: FilterOp = opUsesOption(col, 'is') || col.type === 'date' ? 'is' : 'contains';
   return { ...query, filters: [...query.filters, { id: uid(), columnId: col.id, op, value: '' }] };
 }
 

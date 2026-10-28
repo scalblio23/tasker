@@ -10,6 +10,7 @@ const TYPES: { type: ColumnType; label: string; hint: string; color: string }[] 
   { type: 'people', label: 'Person', hint: 'Assign users', color: '#00a9ff' },
   { type: 'time', label: 'Time tracking', hint: 'Start / stop timers', color: '#e2445c' },
   { type: 'files', label: 'Attachments', hint: 'Upload files and images', color: '#9aadbd' },
+  { type: 'date', label: 'Date', hint: 'Pick a date from a calendar', color: '#ff7575' },
 ];
 
 export function AddColumn({ onAdd }: { onAdd: (type: ColumnType, name: string) => void }) {
