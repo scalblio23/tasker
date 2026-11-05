@@ -1,10 +1,11 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Store } from './_store.js';
 
-/** Stored per key: never the key itself, only its SHA-256. */
+/** Stored per key. `key` is kept so the app can show it for copying; checks use the SHA-256. */
 export interface KeyRecord {
   id: string;
   name: string;
+  key?: string;
   /** First characters of the key, shown so people can tell keys apart. */
   prefix: string;
   hash: string;
@@ -20,6 +21,7 @@ export function newKey(name: string): { key: string; record: KeyRecord } {
     id: randomBytes(6).toString('hex'),
     name: name.trim().slice(0, 60) || 'API key',
     prefix: key.slice(0, 10),
+    key,
     hash: sha256(key),
     createdAt: Date.now(),
   };

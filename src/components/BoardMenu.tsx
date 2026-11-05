@@ -80,7 +80,7 @@ export function BoardMenu({ board, update }: { board: Board; update: Mutator }) 
                   setOpen(false);
                 }}
               >
-                🔑 API access…
+                🔑 API key…
               </button>
               <button onClick={exportJson}>⤓ Download a copy (JSON)</button>
               <button onClick={() => setRestoring(true)}>↺ Restore tasks from a backup…</button>

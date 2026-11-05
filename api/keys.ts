@@ -2,10 +2,9 @@ import { authorized, getStore, json } from './_store.js';
 import { listKeys, newKey, type KeyRecord } from './_keys.js';
 
 /**
- * Manage export API keys from the app (guarded by the team passcode when one is set).
- *   GET    → keys without their secret (name, prefix, created, last used)
- *   POST   { name } → creates a key and returns it once
- *   DELETE ?id=…   → revokes a key
+ * The board's API key, shown in the app for copying (guarded by the team passcode when one is set).
+ *   GET               → the current key, created automatically the first time
+ *   POST {regenerate} → replaces every key with a new one (old ones stop working)
  */
 const pub = ({ hash: _hash, ...rest }: KeyRecord) => rest;
 
@@ -19,29 +18,20 @@ async function guard(request: Request) {
 export async function GET(request: Request) {
   const { store, res } = await guard(request);
   if (!store) return res;
-  return json({ keys: (await listKeys(store)).map(pub) });
+  // The newest key that can still be shown; make one if there is none.
+  let current = (await listKeys(store)).find((k) => k.key);
+  if (!current) {
+    current = newKey('API key').record;
+    await store.putKey(current.id, JSON.stringify(current));
+  }
+  return json({ key: pub(current) });
 }
 
 export async function POST(request: Request) {
   const { store, res } = await guard(request);
   if (!store) return res;
-  let name = '';
-  try {
-    name = String((await request.json()).name ?? '');
-  } catch {
-    /* unnamed */
-  }
-  if ((await listKeys(store)).length >= 20) return json({ error: 'Too many keys — revoke one first.' }, 400);
-  const { key, record } = newKey(name);
+  for (const k of await listKeys(store)) await store.deleteKey(k.id);
+  const { record } = newKey('API key');
   await store.putKey(record.id, JSON.stringify(record));
-  return json({ key, record: pub(record) });
-}
-
-export async function DELETE(request: Request) {
-  const { store, res } = await guard(request);
-  if (!store) return res;
-  const id = new URL(request.url).searchParams.get('id');
-  if (!id) return json({ error: 'id required' }, 400);
-  await store.deleteKey(id);
-  return json({ ok: true });
+  return json({ key: pub(record) });
 }

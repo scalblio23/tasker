@@ -506,3 +506,13 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .example { margin-bottom: 10px; }
 .example-label { font-size: 13px; font-weight: 500; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.api-btn { border: 1px solid var(--border); }
+.api-label { display: block; font-size: 13px; font-weight: 600; margin: 16px 0 4px; }
+.key-value.big { font-size: 14px; padding: 9px 10px; user-select: all; }
+.api-modal .key-value { user-select: all; }
+.small-seg { margin: 2px 0 2px; }
+.small-seg button { padding: 4px 10px; font-size: 12px; }
+.api-modal a.btn { text-decoration: none; color: var(--text); }
+.api-help { margin-top: 16px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; background: var(--hover); padding: 10px 12px; border-radius: 6px; }
+.api-help code { word-break: break-all; }
+.api-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }

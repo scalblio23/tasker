@@ -68,9 +68,11 @@ restoring only adds missing tasks (matching people by name and labels by text), 
 
 ## API (read-only export)
 
-Pull all current board data into other apps. In the app: board **⋯** menu → **API access** →
-**Create API key** (shown once; revoke any time). Keys are stored only as SHA-256 hashes, apart
-from the synced board data. Optionally a `TASKER_API_KEY` environment variable also works as a key.
+Pull all current board data into other apps. In the app click **🔑 API** (top of the board): the
+board's key is shown ready to copy, along with a data URL that already contains it — paste that into
+a browser, spreadsheet or any app. *Regenerate key* replaces it (the old one stops working).
+Keys live in their own Redis hash, apart from the synced board data. Optionally a `TASKER_API_KEY`
+environment variable also works as a key. `/api/tasks` is an alias of `/api/export`.
 
 ```
 GET /api/export                              JSON: board, columns, groups, people, tasks, timeEntries

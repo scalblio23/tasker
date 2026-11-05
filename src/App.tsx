@@ -17,6 +17,7 @@ import { TimerChip } from './components/TimerChip';
 import { UserMenu } from './components/UserMenu';
 import { PasscodeScreen, SyncBadge } from './components/SyncBadge';
 import { BoardMenu } from './components/BoardMenu';
+import { ApiAccess } from './components/ApiAccess';
 
 type Panel = 'filter' | 'sort' | null;
 
@@ -26,6 +27,8 @@ export default function App() {
   const [panel, setPanel] = useState<Panel>(null);
   const [page, setPage] = useState<'table' | 'reports' | 'archive'>('table');
   const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set());
+  const [apiOpen, setApiOpen] = useState(false);
+  const closeApi = useCallback(() => setApiOpen(false), []);
   const filterBtn = useRef<HTMLButtonElement>(null);
   const sortBtn = useRef<HTMLButtonElement>(null);
 
@@ -218,6 +221,10 @@ export default function App() {
             />
             <BoardMenu board={board} update={update} />
             <SyncBadge status={status} error={error} />
+            <button className="btn ghost small api-btn" onClick={() => setApiOpen(true)} title="API key for external apps">
+              🔑 API
+            </button>
+            {apiOpen && <ApiAccess onClose={closeApi} />}
             <div className="spacer" />
             <TimerChip board={board} update={update} />
             <UserMenu board={board} update={update} />
