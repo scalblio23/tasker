@@ -13,11 +13,25 @@ export interface Store {
   /** Write entities (JSON string, or "null" as a deletion tombstone) at `rev`. */
   write(rev: number, entries: Record<string, string>): Promise<void>;
   changedSince(rev: number): Promise<string[]>;
+  /** API key records (JSON, holding only a hash of each key), kept apart from the synced board. */
+  listKeys(): Promise<Record<string, string>>;
+  putKey(id: string, record: string): Promise<void>;
+  deleteKey(id: string): Promise<void>;
 }
 
 const HASH = 'tasker:entities';
 const LOG = 'tasker:log';
 const REV = 'tasker:rev';
+const KEYS = 'tasker:apikeys';
+
+/** HGETALL comes back as a flat [field, value, …] array when automaticDeserialization is off. */
+function hashReply(raw: unknown): Record<string, string> {
+  if (!raw) return {};
+  if (!Array.isArray(raw)) return raw as Record<string, string>;
+  const out: Record<string, string> = {};
+  for (let i = 0; i + 1 < raw.length; i += 2) out[String(raw[i])] = String(raw[i + 1]);
+  return out;
+}
 
 function redisStore(url: string, token: string): Store {
   const redis = new Redis({ url, token, automaticDeserialization: false });
@@ -26,14 +40,7 @@ function redisStore(url: string, token: string): Store {
     nextRev: () => redis.incr(REV),
     // With automaticDeserialization off, HGETALL / HMGET come back as raw Redis replies (flat arrays),
     // not objects — handle both shapes.
-    getAll: async () => {
-      const raw = (await redis.hgetall(HASH)) as unknown;
-      if (!raw) return {};
-      if (!Array.isArray(raw)) return raw as Record<string, string>;
-      const out: Record<string, string> = {};
-      for (let i = 0; i + 1 < raw.length; i += 2) out[String(raw[i])] = String(raw[i + 1]);
-      return out;
-    },
+    getAll: async () => hashReply(await redis.hgetall(HASH)),
     getMany: async (keys) => {
       if (!keys.length) return [];
       const raw = (await redis.hmget(HASH, ...keys)) as unknown;
@@ -52,6 +59,9 @@ function redisStore(url: string, token: string): Store {
       await p.exec();
     },
     changedSince: (rev) => redis.zrange<string[]>(LOG, `(${rev}`, '+inf', { byScore: true }),
+    listKeys: async () => hashReply(await redis.hgetall(KEYS)),
+    putKey: async (id, record) => void (await redis.hset(KEYS, { [id]: record })),
+    deleteKey: async (id) => void (await redis.hdel(KEYS, id)),
   };
 }
 
@@ -59,9 +69,10 @@ function redisStore(url: string, token: string): Store {
  * In-process store for `npm run dev`, so several local tabs can share a board without Redis.
  * Kept on globalThis: Vite can instantiate this module more than once, and every copy must share one store.
  */
-type Memory = { rev: number; hash: Map<string, string>; log: Map<string, number> };
+type Memory = { rev: number; hash: Map<string, string>; log: Map<string, number>; keys?: Map<string, string> };
 const g = globalThis as { __taskerMemory?: Memory };
-const memory = (g.__taskerMemory ??= { rev: 0, hash: new Map(), log: new Map() });
+const memory: Memory = (g.__taskerMemory ??= { rev: 0, hash: new Map(), log: new Map() });
+const memKeys = (memory.keys ??= new Map<string, string>());
 const memoryStore: Store = {
   rev: async () => memory.rev,
   nextRev: async () => ++memory.rev,
@@ -74,6 +85,9 @@ const memoryStore: Store = {
     }
   },
   changedSince: async (rev) => [...memory.log].filter(([, r]) => r > rev).map(([k]) => k),
+  listKeys: async () => Object.fromEntries(memKeys),
+  putKey: async (id, record) => void memKeys.set(id, record),
+  deleteKey: async (id) => void memKeys.delete(id),
 };
 
 export function getStore(): Store | null {

@@ -489,3 +489,20 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .cal-day.today { box-shadow: inset 0 0 0 1.5px var(--primary); color: var(--primary); font-weight: 600; }
 .cal-day.selected { background: var(--primary); color: #fff; box-shadow: none; }
 .bulk-pop .calendar { width: 240px; }
+
+/* ---------- API access modal ---------- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 200; display: flex; align-items: flex-start; justify-content: center; padding: 48px 16px; overflow-y: auto; }
+.modal { background: var(--surface); border-radius: 12px; padding: 20px 24px; width: min(720px, 100%); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; }
+.modal-head h2 { margin: 0; font-size: 20px; }
+.notice { padding: 10px 12px; border-radius: 6px; background: #fff7e6; border: 1px solid #fde2b0; margin: 10px 0; font-size: 13px; }
+.notice.success { background: #e9f9f1; border-color: #a8e6c8; }
+.notice.error { background: #fff0f2; border-color: #ffc9d1; color: #b4253c; }
+.key-create { display: flex; gap: 8px; margin: 12px 0; }
+.key-create .input { flex: 1; }
+.key-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.key-value { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; background: var(--hover); padding: 6px 8px; border-radius: 4px; font-size: 12px; }
+.api-h3 { font-size: 14px; margin: 18px 0 6px; }
+.example { margin-bottom: 10px; }
+.example-label { font-size: 13px; font-weight: 500; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }

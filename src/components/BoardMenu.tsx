@@ -6,6 +6,7 @@ import { uploadLocalFiles } from '../files';
 import { syncConfig } from '../syncConfig';
 import { migrateBoard } from '../defaults';
 import { Popover } from './Popover';
+import { ApiAccess } from './ApiAccess';
 
 /** Board ⋯ menu: export a JSON copy, and restore tasks from a backup or a file (merge, never delete). */
 export function BoardMenu({ board, update }: { board: Board; update: Mutator }) {
@@ -13,6 +14,7 @@ export function BoardMenu({ board, update }: { board: Board; update: Mutator }) 
   const file = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [api, setApi] = useState(false);
 
   const restore = async (source: Board, label: string) => {
     const missing = source.items.filter((i) => !board.items.some((b) => b.id === i.id));
@@ -60,6 +62,7 @@ export function BoardMenu({ board, update }: { board: Board; update: Mutator }) 
           }
         }}
       />
+      {api && <ApiAccess onClose={() => setApi(false)} />}
       {open && (
         <Popover
           anchor={ref}
@@ -71,6 +74,14 @@ export function BoardMenu({ board, update }: { board: Board; update: Mutator }) 
         >
           {!restoring ? (
             <>
+              <button
+                onClick={() => {
+                  setApi(true);
+                  setOpen(false);
+                }}
+              >
+                🔑 API access…
+              </button>
               <button onClick={exportJson}>⤓ Download a copy (JSON)</button>
               <button onClick={() => setRestoring(true)}>↺ Restore tasks from a backup…</button>
               <button onClick={() => file.current?.click()}>⤒ Restore tasks from a file…</button>

@@ -20,6 +20,7 @@ npm run build    # typecheck + production build into dist/
 - **Person column** — click a cell to assign one or more users. Filter with *Person is Jem*, sort, bulk-assign or paste names.
 - **Time tracking** — every entry belongs to a user. The first ▶ on a device asks *who's tracking?* and remembers it; after that ▶ starts a timer for that user (starting another stops the first); ■ stops it. The running timer also shows top right with a Stop button. Avatars show who is tracking each running timer. Click the total to see the time log with a per-person breakdown, reassign an entry to someone else, add time manually for a chosen person ("1h 30m", "1:30", "1.5") or delete entries.
 - **Reports tab** — time tracked today / this week / this month / all time, for everyone or one person: totals, by person, by task, the full log, and CSV export.
+- **API** — read-only export of all data as JSON or CSV with API keys you create in the app (see *API* below).
 - **Date column** — click a cell for a calendar (weeks start Monday) with *Today* and *Clear*. Filter with *is / is not / is before / is after / is empty*, sort chronologically, bulk-set from the bar, or paste dates such as `2026-10-28`, `28/10/2026` (day first) or `28 Oct 2026`.
 - **Select rows** — tick the checkbox on the left of a row (or the header checkbox for a whole group) to get a bar with *Archive*, *Move to* group and *Delete*. Esc clears.
 - **Archive** — archived tasks (with their subtasks) leave the board and appear in the *Archive* tab, where they can be searched, restored or deleted for good. Archiving syncs to everyone; tracked time stays in reports.
@@ -64,6 +65,26 @@ sharing, restoring), a copy is saved locally; the first copy is kept for good pl
 When a browser with tasks the shared board doesn't have connects, it asks whether to add them.
 The board's **⋯** menu can download a JSON copy and restore tasks from a backup or a file —
 restoring only adds missing tasks (matching people by name and labels by text), never deletes.
+
+## API (read-only export)
+
+Pull all current board data into other apps. In the app: board **⋯** menu → **API access** →
+**Create API key** (shown once; revoke any time). Keys are stored only as SHA-256 hashes, apart
+from the synced board data. Optionally a `TASKER_API_KEY` environment variable also works as a key.
+
+```
+GET /api/export                              JSON: board, columns, groups, people, tasks, timeEntries
+GET /api/export?format=csv                   tasks as CSV (one row per task/subtask)
+GET /api/export?format=csv&resource=time     time entries as CSV
+    &archived=exclude|include|only           default: exclude archived tasks
+    &subtasks=false                          leave subtasks out
+```
+
+Send the key as `Authorization: Bearer <key>`, an `X-API-Key` header, or `?key=<key>` for tools
+that can't set headers (e.g. Google Sheets `=IMPORTDATA("https://<app>/api/export?format=csv&key=…")`).
+Each task has `id`, `task`, `group`, `parentTask`, `archived` and `fields` keyed by column name, with
+readable values: status/dropdown labels, people's names, dates as `YYYY-MM-DD`, link and file URLs,
+time tracked in hours.
 
 Troubleshooting: open `https://<your-app>/api/sync?full=1`. `{"configured":true,…}` means sharing is on;
 `{"configured":false}` means the Redis variables aren't reaching the deployment (redeploy); a page of
